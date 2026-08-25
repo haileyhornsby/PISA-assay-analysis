@@ -23,8 +23,12 @@ options(scipen = 999)
 # ----------------------------
 
 msd_file <- "23O1BAD376_AP MSD 19 05 2026_2026-05-19-175347_each spot as plate.txt"
-sample_map_file <- "sample_map.csv"
-output_file <- "IL8_SpyCEP_analysis.xlsx"
+sample_map_file <- paste0(
+  tools::file_path_sans_ext(basename(msd_file)),
+  ".txt")
+output_file <- paste0(
+  tools::file_path_sans_ext(basename(msd_file)),
+  "_analysis.xlsx")
 
 # Sample dilution series
 dilution_factor <- 3 # sample and IVIG dilution series are 3-fold steps
@@ -217,6 +221,73 @@ ivig_wells <- expand.grid(
 ivig_wells_mean <- ivig_wells %>%
   group_by(sample_number, sample_name, start_dilution, dilution) %>%
   summarise(signal = mean(signal, na.rm = TRUE), type = "IVIG", .groups = "drop")
+
+# generate a plate plan
+plate_plan_long <- bind_rows(
+  
+  # Samples
+  sample_wells %>%
+    transmute(
+      well,
+      label = paste0(
+        sample_name,
+        "\n1:",
+        dilution
+      )
+    ),
+  
+  # Controls
+  control_wells %>%
+    transmute(
+      well,
+      label = type
+    ),
+  
+  # IVIG
+  ivig_wells %>%
+    transmute(
+      well,
+      label = paste0(
+        "IVIG",
+        "\n1:",
+        dilution
+      )
+    ),
+  
+  # Calibration standards
+  cal_wells %>%
+    transmute(
+      well,
+      label = if_else(
+        concentration_pg_ml == 0,
+        "Cal blank",
+        paste0(
+          "Cal ",
+          calibrator,
+          "\n",
+          concentration_pg_ml,
+          " pg/mL"
+        )
+      )
+    )
+)
+
+# Convert to 8 x 12 plate layout
+plate_plan <- plate_plan_long %>%
+  mutate(
+    row = substr(well, 1, 1),
+    col = as.integer(
+      sub("^[A-H]", "", well)
+    )
+  ) %>%
+  dplyr::select(row, col, label) %>%
+  tidyr::pivot_wider(
+    names_from = col,
+    values_from = label
+  ) %>%
+  arrange(
+    match(row, LETTERS[1:8])
+  )
 
 # ----------------------------
 # 5. Plate QC checks
@@ -445,7 +516,7 @@ curve_data <- tibble(
     OD_fit = IL8_fit$predict(concentration_pg_ml)
   )
 
-ggplot() +
+calibration_curve <- ggplot() +
   geom_point(
     data = calibration_data,
     aes(
@@ -470,6 +541,8 @@ ggplot() +
     y = "OD"
   ) +
   theme_classic()
+
+calibration_curve
 
 # -----------------------------------------------------------
 # 7. Fit the inverse of the 4PL function and set assay limits
@@ -572,13 +645,12 @@ sample_results <- sample_and_ivig_wells %>%
          )
   )
 
-sample_results
-
 # ----------------------------
 # 9. Plot sample IL-8 quantities
 # ----------------------------
 
-ggplot(sample_results, aes(x = dilution, y = il8_ng_ml, colour = sample_name)) +
+il8_concentration_plot <- ggplot(
+  sample_results, aes(x = dilution, y = il8_ng_ml, colour = sample_name)) +
   geom_point() +
   geom_line() +
   scale_x_log10() +
@@ -601,6 +673,8 @@ ggplot(sample_results, aes(x = dilution, y = il8_ng_ml, colour = sample_name)) +
   ) +
   theme_classic()
 
+il8_concentration_plot
+
 # ----------------------------
 # Calibration curve with
 # assay limits and samples
@@ -612,9 +686,7 @@ calibration_plot_samples <- sample_results %>%
     is.finite(signal)
   )
 
-ggplot() +
-  
-  # Calibration standards
+calibration_curve_samples <- ggplot() +
   geom_point(
     data = calibration_data,
     aes(
@@ -684,6 +756,8 @@ ggplot() +
     shape = "Sample status"
   ) +
   theme_classic()
+
+calibration_curve_samples
 
 # -----------------------------------------------------
 # 10. Linear regression and calculation of sample IC50s
@@ -810,7 +884,7 @@ sample_plot_data <- sample_response %>%
       slope * log_dilution
   )
 
-ggplot(
+regression_plot <- ggplot(
   sample_plot_data,
   aes(
     x = dilution,
@@ -843,6 +917,8 @@ ggplot(
   ) +
   theme_classic()
 
+regression_plot
+
 # ---------------------------------
 # 12. Report final calculated IC50s
 # ---------------------------------
@@ -861,4 +937,210 @@ ic50_summary
 # 13. Generate an assay / results output file
 # -------------------------------------------
 
+# Create output directory for plots
+plot_dir <- "IL8_analysis_plots"
+
+if (!dir.exists(plot_dir)) {
+  dir.create(plot_dir)
+}
+
+# Save plots as PNG files
+ggsave(
+  file.path(plot_dir, "01_calibration_curve.png"),
+  calibration_curve,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+ggsave(
+  file.path(plot_dir, "02_IL-8_concentrations.png"),
+  il8_concentration_plot,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+ggsave(
+  file.path(plot_dir, "03_calibration_curve_samples.png"),
+  calibration_curve_samples,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+ggsave(
+  file.path(plot_dir, "04_IC50_regression.png"),
+  regression_plot,
+  width = 8,
+  height = 6,
+  dpi = 300
+)
+
+# Create Excel workbook
+wb <- createWorkbook()
+
+# Add assay parameters
+
+assay_parameters <- tibble(
+  parameter = c(
+    "MSD file",
+    "Sample map file",
+    "Dilution factor",
+    "Number of sample points",
+    "IVIG starting dilution",
+    "Number of IVIG points",
+    "Sample dilution correction",
+    "pg to ng conversion",
+    "Calibration concentrations (pg/mL)",
+    "Calibration signal minimum",
+    "Calibration signal maximum",
+    "Assay signal minimum",
+    "Assay signal maximum",
+    "Minimum IL-8 (ng/mL)",
+    "Maximum IL-8 (ng/mL)",
+    "50% IL-8 response (ng/mL)",
+    "4PL Bottom",
+    "4PL Top",
+    "4PL IC50",
+    "4PL Hill slope"
+  ),
+  value = c(
+    msd_file,
+    sample_map_file,
+    dilution_factor,
+    n_sample_points,
+    ivig_start_dilution,
+    n_ivig_points,
+    sample_dilution_correction,
+    pg_to_ng,
+    paste(cal_concentrations, collapse = ", "),
+    calibration_signal_min,
+    calibration_signal_max,
+    assay_signal_min,
+    assay_signal_max,
+    min_il8_ng_ml,
+    max_il8_ng_ml,
+    il8_50_ng_ml,
+    IL8_fit$parameters["Bottom"],
+    IL8_fit$parameters["Top"],
+    IL8_fit$parameters["IC50"],
+    IL8_fit$parameters["HillSlope"]
+  )
+)
+
+# Write data sheets
+
+addWorksheet(wb, "Assay parameters")
+writeData(wb, "Assay parameters", assay_parameters)
+
+addWorksheet(wb, "Plate")
+writeData(wb, "Plate", plate, rowNames = TRUE)
+
+addWorksheet(wb, "Sample map")
+writeData(wb, "Sample map", sample_map)
+
+addWorksheet(wb, "Plate plan")
+writeData(wb, "Plate plan", plate_plan)
+
+addWorksheet(wb, "Calibration QC")
+writeData(wb, "Calibration QC", calibration_qc)
+
+addWorksheet(wb, "Control QC")
+writeData(wb, "Control QC", control_qc)
+
+addWorksheet(wb, "IVIG QC")
+writeData(wb, "IVIG QC", ivig_qc)
+
+addWorksheet(wb, "Calibration check")
+writeData(wb, "Calibration check", calibration_check)
+
+addWorksheet(wb, "Sample results")
+writeData(wb, "Sample results", sample_results)
+
+addWorksheet(wb, "IC50 results")
+writeData(wb, "IC50 results", ic50_results)
+
+addWorksheet(wb, "IC50 summary")
+writeData(wb, "IC50 summary", ic50_summary)
+
+
+# Add plots to workbook
+
+addWorksheet(wb, "Plots")
+
+insertImage(
+  wb,
+  "Plots",
+  file.path(plot_dir, "01_calibration_curve.png"),
+  startRow = 1,
+  startCol = 1,
+  width = 8,
+  height = 6
+)
+
+insertImage(
+  wb,
+  "Plots",
+  file.path(plot_dir, "02_IL-8_concentrations.png"),
+  startRow = 1,
+  startCol = 10,
+  width = 8,
+  height = 6
+)
+
+insertImage(
+  wb,
+  "Plots",
+  file.path(plot_dir, "03_calibration_curve_samples.png"),
+  startRow = 35,
+  startCol = 1,
+  width = 8,
+  height = 6
+)
+
+insertImage(
+  wb,
+  "Plots",
+  file.path(plot_dir, "04_IC50_regression.png"),
+  startRow = 35,
+  startCol = 10,
+  width = 8,
+  height = 6
+)
+
+# Basic formatting
+
+for (sheet in names(wb)) {
+  
+  setColWidths(
+    wb,
+    sheet,
+    cols = 1:20,
+    widths = "auto"
+  )
+  
+  freezePane(
+    wb,
+    sheet,
+    firstRow = TRUE
+  )
+}
+
+# Save workbook
+
+saveWorkbook(
+  wb,
+  output_file,
+  overwrite = TRUE
+)
+
+cat(
+  "\nAnalysis complete.\n",
+  "Results saved to: ",
+  output_file,
+  "\nPlots saved to: ",
+  plot_dir,
+  "\n"
+)
 
