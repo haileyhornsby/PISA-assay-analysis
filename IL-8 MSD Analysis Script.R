@@ -29,7 +29,7 @@ output_file <- "IL8_SpyCEP_analysis.xlsx"
 # Sample dilution series
 dilution_factor <- 3 # sample and IVIG dilution series are 3-fold steps
 n_sample_points <- 4 # each sample dilution series is 4 wells long
-                     # starting dilution for each sample is found in the sample name .csv
+# starting dilution for each sample is found in the sample name .csv
 
 # IVIG control
 ivig_start_dilution <- 12.5 # IVIG dilution series starts at 1:12.5
@@ -73,14 +73,14 @@ data_lines <- x[
 plate <- lapply(
   data_lines,
   function(z) {
-        values <- strsplit(
+    values <- strsplit(
       trimws(z),
       "\\s+"
     )[[1]]
-        values <- values[
+    values <- values[
       values != ""
     ]
-        # Check that each row contains 12 wells
+    # Check that each row contains 12 wells
     if (length(values) != 12) {
       
       stop(
@@ -90,7 +90,7 @@ plate <- lapply(
         z
       )
     }
-      as.numeric(values)
+    as.numeric(values)
   }
 )
 
@@ -140,17 +140,17 @@ sample_map <- read_csv(
   arrange(sample_number)
 
 sample_annotation <- lapply(1:16, function(i) {
-    if (i <= 8) {
+  if (i <= 8) {
     rows <- LETTERS[1:4]
     col <- i
   } else {
     rows <- LETTERS[5:8]
     col <- i - 8
   }
-    start <- sample_map$start_dilution[
+  start <- sample_map$start_dilution[
     sample_map$sample_number == i
   ]
-    tibble(
+  tibble(
     sample_number = i,
     sample_name = sample_map$sample_name[
       sample_map$sample_number == i
@@ -214,6 +214,10 @@ ivig_wells <- expand.grid(
   ) %>%
   left_join(plate_long, by = "well")
 
+ivig_wells_mean <- ivig_wells %>%
+  group_by(sample_number, sample_name, start_dilution, dilution) %>%
+  summarise(signal = mean(signal, na.rm = TRUE), type = "IVIG", .groups = "drop")
+
 # ----------------------------
 # 5. Plate QC checks
 # ----------------------------
@@ -257,16 +261,16 @@ control_qc
 
 # IVIG 
 ivig_qc <- ivig_wells %>%
-    group_by(
+  group_by(
     dilution
   ) %>%
-    summarise(
+  summarise(
     mean_signal = mean(signal, na.rm = TRUE),
-        cv_percent = round(
+    cv_percent = round(
       100 * sd(signal, na.rm = TRUE) / mean_signal,
       2
     ),
-        cv_qc = if_else(
+    cv_qc = if_else(
       cv_percent <= 5, # duplicates are flagged if > 5% CV
       "PASS",
       "FLAG"
@@ -300,18 +304,18 @@ calibration_data <- calibration_qc %>%
   filter(concentration_pg_ml > 0)
 
 fit_4pl <- function(data,
-                          x_col = "concentration_pg_ml",
-                          y_col = "mean_signal") {
+                    x_col = "concentration_pg_ml",
+                    y_col = "mean_signal") {
   
   x <- data[[x_col]]
   y <- data[[y_col]]
   
   # 4PL, numerically stable
   stable_4pl <- function(x,
-                               Bottom,
-                               logTop,
-                               logIC50,
-                               logHillSlope) {
+                         Bottom,
+                         logTop,
+                         logIC50,
+                         logHillSlope) {
     
     Top <- exp(logTop)
     IC50 <- exp(logIC50)
@@ -321,7 +325,7 @@ fit_4pl <- function(data,
       (Top - Bottom) / (1 + exp(z))
   }
   
-# Relative weighting: 1/Y^2
+  # Relative weighting: 1/Y^2
   objective <- function(par) {
     
     pred <- stable_4pl(
@@ -405,7 +409,7 @@ fit_4pl <- function(data,
       )
     )
   ]]
-    parameters <- c(
+  parameters <- c(
     Bottom = best_fit$par["Bottom"],
     Top = exp(best_fit$par["logTop"]),
     IC50 = exp(best_fit$par["logIC50"]),
@@ -532,44 +536,40 @@ il8_50_ng_ml
 # -------------------------------------
 # 8. Interpolate sample IL-8 quantities
 # -------------------------------------
-# Average IVIG duplicates
-ivig_wells_mean <- ivig_wells %>%
-  group_by(sample_number, sample_name, start_dilution, dilution) %>%
-  summarise(signal = mean(signal, na.rm = TRUE), type = "IVIG", .groups = "drop")
 
 sample_and_ivig_wells <- bind_rows(
   sample_wells %>%
     dplyr::select(sample_number, sample_name, start_dilution, well,
-           dilution, signal, type),
+                  dilution, signal, type),
   ivig_wells_mean %>%
     dplyr::select(sample_number, sample_name, start_dilution,
-           dilution, signal, type)
+                  dilution, signal, type)
 )
 
 sample_results <- sample_and_ivig_wells %>%
   mutate(calibration_status = case_when(signal < calibration_signal_min ~ "BELOW_CALIBRATION_RANGE",
                                         signal > calibration_signal_max ~ "ABOVE_CALIBRATION_RANGE",
                                         TRUE                            ~ "WITHIN_CALIBRATION_RANGE"),
-    # Convert signal to IL-8 concentration whenever it is within the calibration range
-    il8_pg_ml = if_else(calibration_status == "WITHIN_CALIBRATION_RANGE",
-      inverse_IL8_fit(signal, IL8_fit),
-      NA_real_),
-    il8_ng_ml =
-      il8_pg_ml *
-      sample_dilution_correction *
-      pg_to_ng,
-    # Now assess whether the concentration is
-    # within the actual assay response limits
-    assay_status = case_when(
-      calibration_status != "WITHIN_CALIBRATION_RANGE" ~
-        "OUTSIDE_CALIBRATION_RANGE",
-      il8_ng_ml < min_il8_ng_ml ~
-        "BELOW_ASSAY_RANGE",
-      il8_ng_ml > max_il8_ng_ml ~
-        "ABOVE_ASSAY_RANGE",
-      TRUE ~
-        "WITHIN_ASSAY_RANGE"
-    )
+         # Convert signal to IL-8 concentration whenever it is within the calibration range
+         il8_pg_ml = if_else(calibration_status == "WITHIN_CALIBRATION_RANGE",
+                             inverse_IL8_fit(signal, IL8_fit),
+                             NA_real_),
+         il8_ng_ml =
+           il8_pg_ml *
+           sample_dilution_correction *
+           pg_to_ng,
+         # Now assess whether the concentration is
+         # within the actual assay response limits
+         assay_status = case_when(
+           calibration_status != "WITHIN_CALIBRATION_RANGE" ~
+             "OUTSIDE_CALIBRATION_RANGE",
+           il8_ng_ml < min_il8_ng_ml ~
+             "BELOW_ASSAY_RANGE",
+           il8_ng_ml > max_il8_ng_ml ~
+             "ABOVE_ASSAY_RANGE",
+           TRUE ~
+             "WITHIN_ASSAY_RANGE"
+         )
   )
 
 sample_results
@@ -683,9 +683,7 @@ ggplot() +
     colour = "Sample status",
     shape = "Sample status"
   ) +
-  
   theme_classic()
-
 
 # -----------------------------------------------------
 # 10. Linear regression and calculation of sample IC50s
@@ -709,18 +707,16 @@ sample_models <- sample_response %>%
     il8_ng_ml = mean(il8_ng_ml, na.rm = TRUE),
     .groups = "drop"
   ) %>%
-  
   group_by(
     sample_number,
     sample_name
   ) %>%
-  
   group_modify(~ {
-      if (
+    if (
       nrow(.x) < 2 ||
       n_distinct(.x$log_dilution) < 2
     ) {
-        return(
+      return(
         tibble(
           intercept = NA_real_,
           slope = NA_real_,
@@ -728,17 +724,17 @@ sample_models <- sample_response %>%
         )
       )
     }
-      fit <- lm(
+    fit <- lm(
       il8_ng_ml ~ log_dilution,
       data = .x
     )
-      tibble(
+    tibble(
       intercept = coef(fit)[1],
       slope = coef(fit)[2],
       r_squared = summary(fit)$r.squared
     )
-    }) %>%
-    ungroup()
+  }) %>%
+  ungroup()
 
 sample_plot_data <- sample_response %>%
   left_join(
@@ -747,8 +743,7 @@ sample_plot_data <- sample_response %>%
   ) %>%
   mutate(
     fitted_il8 = intercept +
-      slope * log_dilution
-  )
+      slope * log_dilution)
 
 sample_range <- sample_response %>%
   group_by(
@@ -764,16 +759,13 @@ sample_range <- sample_response %>%
     .groups = "drop"
   )
 
+# Calculate the serum dilution corresponding to the 50% inhibition value
 ic50_results <- sample_models %>%
   left_join(
     sample_range,
     by = c("sample_number", "sample_name")
   ) %>%
-  mutate(
-    
-    il8_50_ng_ml = il8_50_ng_ml,
-    
-    # Calculate the dilution corresponding to the 50% response
+  mutate(il8_50_ng_ml = il8_50_ng_ml,
     log10_ic50 = (
       il8_50_ng_ml - intercept
     ) / slope,
@@ -782,49 +774,31 @@ ic50_results <- sample_models %>%
     
     # Determine what happened in the dilution series
     ic50_status = case_when(
-      
       is.na(calculated_ic50) ~
-        "NO_RESULT",
-      
+        "No result",
       observed_max_il8 < il8_50_ng_ml ~
-        "INSUFFICIENT_ACTIVITY",
-      
+        "Insufficient activity",
       observed_min_il8 > il8_50_ng_ml ~
-        "HIGH_ACTIVITY_RETEST",
-      
+        "High activity - retest",
       calculated_ic50 < min_dilution ~
-        "HIGH_ACTIVITY_RETEST",
-      
-      calculated_ic50 > max_dilution ~
-        "LOW_ACTIVITY_RETEST",
-      
+        "High activity - retest",
       TRUE ~
-        "INTERPOLATED"
+        "Interpolated"
     ),
-    
-    # Special assay rule:
-    # only assign IC50 = 15 when the sample
-    # started at 1:30 and never reached the
-    # 50% IL-8 threshold
+    #  assign IC50 = starting dilution / 2 where the sample never reaches the 50% IL-8 threshold
     ic50_dilution = case_when(
-      
-      ic50_status == "INSUFFICIENT_ACTIVITY" &
-        start_dilution == 30 ~
-        15,
-      
-      ic50_status == "INTERPOLATED" ~
+      ic50_status == "Insufficient activity" ~
+        start_dilution / 2,
+      ic50_status == "Interpolated" ~
         calculated_ic50,
-      
       TRUE ~
         NA_real_
     )
   )
 
-ic50_results
-
-# ----------------------------
-# Sample IC50 plots
-# ----------------------------
+# --------------------------------------
+# 11. Plot the sample/IVIG linear regression 
+# --------------------------------------
 
 sample_plot_data <- sample_response %>%
   left_join(
@@ -836,35 +810,28 @@ sample_plot_data <- sample_response %>%
       slope * log_dilution
   )
 
-
 ggplot(
   sample_plot_data,
   aes(
     x = dilution,
     y = il8_ng_ml,
     colour = sample_name
-  )
-) +
-  
+  )) +
   geom_point(size = 3) +
-  
   geom_line(
     aes(
       y = fitted_il8
     ),
     linewidth = 1
   ) +
-  
   geom_hline(
     yintercept = il8_50_ng_ml,
     linetype = "dotted",
     colour = "black"
   ) +
-  
   scale_x_log10() +
-  
   labs(
-    title = "Sample IL-8 response curves",
+    title = "IL-8 linear regression plot",
     subtitle = paste0(
       "50% IL-8 response = ",
       round(il8_50_ng_ml, 3),
@@ -874,14 +841,24 @@ ggplot(
     y = "IL-8 (ng/mL)",
     colour = "Sample"
   ) +
-  
   theme_classic()
+
+# ---------------------------------
+# 12. Report final calculated IC50s
+# ---------------------------------
 
 ic50_summary <- ic50_results %>%
   group_by(sample_number, sample_name) %>%
   summarise(
     ic50 = first(ic50_dilution),
+    ic50_status,
     .groups = "drop"
   )
 
 ic50_summary
+
+# -------------------------------------------
+# 13. Generate an assay / results output file
+# -------------------------------------------
+
+
