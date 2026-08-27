@@ -25,7 +25,7 @@ options(scipen = 999)
 msd_file <- "23O1BAD376_AP MSD 19 05 2026_2026-05-19-175347_each spot as plate.txt"
 sample_map_file <- paste0(
   tools::file_path_sans_ext(basename(msd_file)),
-  ".txt")
+  ".csv")
 output_file <- paste0(
   tools::file_path_sans_ext(basename(msd_file)),
   "_analysis.xlsx")
@@ -481,10 +481,10 @@ fit_4pl <- function(data,
     )
   ]]
   parameters <- c(
-    Bottom = best_fit$par["Bottom"],
-    Top = exp(best_fit$par["logTop"]),
-    IC50 = exp(best_fit$par["logIC50"]),
-    HillSlope = exp(best_fit$par["logHillSlope"])
+    Bottom = unname(best_fit$par["Bottom"]),
+    Top = unname(exp(best_fit$par["logTop"])),
+    IC50 = unname(exp(best_fit$par["logIC50"])),
+    HillSlope = unname(exp(best_fit$par["logHillSlope"]))
   )
   list(
     fit = best_fit,
@@ -550,10 +550,10 @@ calibration_curve
 
 inverse_IL8_fit <- function(signal, fit) {
   
-  bottom <- unname(fit$parameters["Bottom.Bottom"])
-  top <- unname(fit$parameters["Top.logTop"])
-  ic50 <- unname(fit$parameters["IC50.logIC50"])
-  hill_slope <- unname(fit$parameters["HillSlope.logHillSlope"])
+  bottom <- fit$parameters["Bottom"]
+  top <- fit$parameters["Top"]
+  ic50 <- fit$parameters["IC50"]
+  hill_slope <- fit$parameters["HillSlope"]
   
   log_concentration <- log(ic50) +
     (
@@ -927,7 +927,7 @@ ic50_summary <- ic50_results %>%
   group_by(sample_number, sample_name) %>%
   summarise(
     ic50 = first(ic50_dilution),
-    ic50_status,
+    ic50_status = first(ic50_status),
     .groups = "drop"
   )
 
