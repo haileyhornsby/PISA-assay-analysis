@@ -1,16 +1,34 @@
-# This script is designed to analyse the MSD plate results of the 
+# This script is designed to analyse the MSD plate results of the
 # PISA IL-8 SpyCEP cleavage assay.
+# Master copy: https://github.com/haileyhornsby/PISA-assay-analysis
+
+script_version <- "1.0"
 
 # MSD export -> calibration -> interpolation -> IC50
 
 # Necessary input files
 # a .txt MSD plate reader output file in "_each spot as plate" format
-# a .csv file containing sample names (column A) and starting dilutions (column B). No headers needed
+# a .csv sample map with the SAME NAME as the .txt file, saved in the same folder,
+#   with the headers sample_number, sample_name, start_dilution (one row per sample, 1-16, following SOP plate plan)
+
+# Plate layout
+# Columns 1-8: samples 1-8 in rows A-D and samples 9-16 in rows E-H (3-fold dilutions down the column)
+# Columns 9-10: Max IL-8 (A9, A10, B9, B10) and Min IL-8 (C9, C10, D9, D10) controls,
+#   IVIG in duplicate in rows E-H
+# Columns 11-12: IL-8 calibrators 1-7 and blank (row H) in duplicate
 
 
 # ----------------------------
 # 1. Packages
 # ----------------------------
+
+# Install any missing packages (only needed the first time), then load them
+required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx")
+missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
+if (length(missing_packages) > 0) {
+  message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
+  install.packages(missing_packages)
+}
 
 library(readr)
 library(dplyr)
@@ -22,13 +40,16 @@ options(scipen = 999)
 # 2. Files and assay settings
 # ----------------------------
 
-msd_file <- "23O1BAD376_AP MSD 19 05 2026_2026-05-19-175347_each spot as plate.txt"
-sample_map_file <- paste0(
-  tools::file_path_sans_ext(basename(msd_file)),
-  ".csv")
-output_file <- paste0(
-  tools::file_path_sans_ext(basename(msd_file)),
-  "_analysis.xlsx")
+msd_file <- "C:/path/to/plate_each spot as plate.txt" # paste the full path to the MSD .txt file here (use / not \)
+sample_map_file <- file.path(
+  dirname(msd_file),
+  paste0(tools::file_path_sans_ext(basename(msd_file)), ".csv"))
+output_file <- file.path(
+  dirname(msd_file),
+  paste0(tools::file_path_sans_ext(basename(msd_file)), "_analysis.xlsx"))
+plot_dir <- file.path(
+  dirname(msd_file),
+  paste0(tools::file_path_sans_ext(basename(msd_file)), "_plots"))
 
 # Sample dilution series
 dilution_factor <- 3 # sample and IVIG dilution series are 3-fold steps
@@ -161,7 +182,7 @@ sample_annotation <- lapply(1:16, function(i) {
     ],
     start_dilution = start,
     well = paste0(rows, col),
-    dilution = start * dilution_factor^(0:3)
+    dilution = start * dilution_factor^(0:(n_sample_points - 1))
   )
 }) %>%
   bind_rows()
@@ -538,7 +559,7 @@ calibration_curve <- ggplot() +
   labs(
     title = "IL-8 standard curve",
     x = "Concentration (pg/mL)",
-    y = "OD"
+    y = "MSD signal"
   ) +
   theme_classic()
 
@@ -599,7 +620,7 @@ assay_signal_max <- assay_limits$mean_signal[assay_limits$type == "Max IL-8"]
 max_il8_ng_ml <- assay_limits$il8_ng_ml[assay_limits$type == "Max IL-8"]
 min_il8_ng_ml <- assay_limits$il8_ng_ml[assay_limits$type == "Min IL-8"]
 
-# calculate the amount of IL-8 present when inhibition is 5o% (in ng/ml)
+# calculate the amount of IL-8 present when inhibition is 50% (in ng/ml)
 il8_50_ng_ml <- (
   max_il8_ng_ml - min_il8_ng_ml
 ) / 2 + min_il8_ng_ml
@@ -810,15 +831,6 @@ sample_models <- sample_response %>%
   }) %>%
   ungroup()
 
-sample_plot_data <- sample_response %>%
-  left_join(
-    sample_models,
-    by = c("sample_number", "sample_name")
-  ) %>%
-  mutate(
-    fitted_il8 = intercept +
-      slope * log_dilution)
-
 sample_range <- sample_response %>%
   group_by(
     sample_number,
@@ -938,8 +950,6 @@ ic50_summary
 # -------------------------------------------
 
 # Create output directory for plots
-plot_dir <- "IL8_analysis_plots"
-
 if (!dir.exists(plot_dir)) {
   dir.create(plot_dir)
 }
@@ -984,6 +994,7 @@ wb <- createWorkbook()
 
 assay_parameters <- tibble(
   parameter = c(
+    "Script version",
     "MSD file",
     "Sample map file",
     "Dilution factor",
@@ -1003,9 +1014,12 @@ assay_parameters <- tibble(
     "4PL Bottom",
     "4PL Top",
     "4PL IC50",
-    "4PL Hill slope"
+    "4PL Hill slope",
+    "Analysis date",
+    "R version"
   ),
   value = c(
+    script_version,
     msd_file,
     sample_map_file,
     dilution_factor,
@@ -1025,7 +1039,9 @@ assay_parameters <- tibble(
     IL8_fit$parameters["Bottom"],
     IL8_fit$parameters["Top"],
     IL8_fit$parameters["IC50"],
-    IL8_fit$parameters["HillSlope"]
+    IL8_fit$parameters["HillSlope"],
+    format(Sys.time(), "%Y-%m-%d %H:%M"),
+    R.version.string
   )
 )
 

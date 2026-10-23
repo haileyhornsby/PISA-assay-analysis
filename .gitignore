@@ -1,0 +1,26 @@
+# Never upload plate data or results to this public repository
+*.txt
+*.TXT
+*.csv
+*.xlsx
+*.xls
+*.pdf
+*.png
+*_plots/
+*.RDS
+*.rds
+
+# ...except the SLO plate template
+!SLO haemolysis assay/SLO_plate_template.csv
+
+# R and RStudio files
+.Rhistory
+.RData
+.Rproj.user/
+Rplots.pdf
+
+# Windows / Mac system files
+Thumbs.db
+desktop.ini
+.DS_Store
+~$*
