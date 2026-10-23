@@ -23,7 +23,7 @@ script_version <- "1.0"
 # ----------------------------
 
 # Install any missing packages (only needed the first time), then load them
-required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx")
+required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx", "rstudioapi")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing_packages) > 0) {
   message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
@@ -37,11 +37,32 @@ library(ggplot2)
 library(openxlsx)
 options(scipen = 999)
 
+# Opens a window to choose the input file (in RStudio), or a standard file dialog otherwise
+choose_input_file <- function(caption, filter) {
+  message(caption)
+  path <- if (rstudioapi::isAvailable()) {
+    rstudioapi::selectFile(caption = caption, filter = filter)
+  } else {
+    file.choose()
+  }
+  if (is.null(path) || !nzchar(path)) {
+    stop("No file was chosen. Run the script again and choose the input file.", call. = FALSE)
+  }
+  normalizePath(path, winslash = "/")
+}
+
 # ----------------------------
-# 2. Files and assay settings
+# 2. Input file
 # ----------------------------
 
-msd_file <- "C:/path/to/plate_each spot as plate.txt" # paste the full path to the MSD .txt file here (use / not \)
+# When the script runs, a window opens: choose the MSD .txt export (each spot as plate)
+msd_file <- choose_input_file("Choose the MSD .txt export (each spot as plate)", "Text files (*.txt)")
+
+# ----------------------------------------------
+# Fixed assay information - do not change
+# ----------------------------------------------
+
+# The sample map is read from, and output files are saved to, the same folder as the MSD file
 sample_map_file <- file.path(
   dirname(msd_file),
   paste0(tools::file_path_sans_ext(basename(msd_file)), ".csv"))
@@ -51,6 +72,18 @@ output_file <- file.path(
 plot_dir <- file.path(
   dirname(msd_file),
   paste0(tools::file_path_sans_ext(basename(msd_file)), "_plots"))
+
+# MSD control dilutions (reciprocal)
+control_dilutions <- c("MSD - ctrl 1" = 50000, "MSD - ctrl 2" = 200000, "MSD - ctrl 3" = 800000)
+
+# mAb control curve (pool of monoclonal antibodies, rows G-H)
+mab_start_ug_ml <- 1 # mAb 1 contains 1 ug/mL of each individual mAb
+mab_dilution_factor <- 4 # mAb 2-12 are 4-fold dilutions
+mab_target_antigens <- c("GAC", "ScpA", "SpyAD", "SpyCEP") # antigens recognised by the mAb pool
+
+# QC
+cal_cv_limit <- 15 # PROVISIONAL: calibrator duplicates are flagged if CV > 15%
+sample_cv_limit <- 15 # PROVISIONAL: samples and controls with duplicate CV > 15% are not interpolated
 
 # Calibration curve
 cal_dilution_factor <- 2.5 # calibrators are 2.5-fold steps from Cal-01
@@ -66,18 +99,7 @@ spot_map <- tibble(
                 7, 4, 6, 7, 4) # CHECK: SpnA is 4 AU/mL in the SOP table
 )
 
-# MSD control dilutions (reciprocal)
-control_dilutions <- c("MSD - ctrl 1" = 50000, "MSD - ctrl 2" = 200000, "MSD - ctrl 3" = 800000)
-
-# mAb control curve (pool of monoclonal antibodies, rows G-H)
-mab_start_ug_ml <- 1 # mAb 1 contains 1 ug/mL of each individual mAb
-mab_dilution_factor <- 4 # mAb 2-12 are 4-fold dilutions
-mab_target_antigens <- c("GAC", "ScpA", "SpyAD", "SpyCEP") # antigens recognised by the mAb pool
-
-# QC
-n_samples_expected <- 20 # number of samples on a full plate
-cal_cv_limit <- 15 # calibrator duplicates are flagged if CV > 15%
-sample_cv_limit <- 15 # samples and controls with duplicate CV > 15% are not interpolated
+n_positions <- 20 # sample positions on the plate
 
 # ------------------------------
 # 3. Read in the MSD plate data
@@ -146,25 +168,48 @@ plate_wide <- plate_data %>%
 # 4. Read sample map and annotate data
 # ------------------------------------
 
-sample_map <- read_csv(sample_map_file, show_col_types = FALSE) %>%
+sample_map <- read_csv(sample_map_file, col_types = cols(.default = col_character())) %>%
   mutate(
-    sample_number = as.integer(sample_number),
-    sample_name = as.character(sample_name),
-    start_dilution = as.numeric(start_dilution)
+    sample_number = suppressWarnings(as.integer(sample_number)),
+    sample_name = trimws(coalesce(sample_name, "")),
+    dilution_text = trimws(coalesce(start_dilution, "")),
+    start_dilution = suppressWarnings(as.numeric(dilution_text)),
+    is_empty = tolower(sample_name) == "empty"
   ) %>%
   arrange(sample_number)
 
-# Check sample map
-if (nrow(sample_map) != n_samples_expected) {
-  warning("Expected ", n_samples_expected, " samples in sample map, but found ", nrow(sample_map), ".")
+# Check every plate position has been filled in. Unused positions must be marked
+# empty (with no dilution), so a forgotten entry is not mistaken for an unused position.
+missing_numbers <- setdiff(1:n_positions, sample_map$sample_number)
+input_problems <- c(
+  if (length(missing_numbers) > 0)
+    paste0("Sample number(s) ", paste(missing_numbers, collapse = ", "),
+           " are missing from the sample map. Add a row for every position 1-", n_positions,
+           " (write empty if unused)."),
+  if (anyDuplicated(sample_map$sample_number))
+    "Duplicate sample numbers found in the sample map.",
+  with(sample_map, if (any(sample_name == ""))
+    paste0("No sample_name for sample number(s) ", paste(sample_number[sample_name == ""], collapse = ", "),
+           ". Enter the sample name, or write empty if the position was not used.")),
+  with(sample_map, if (any(is_empty & dilution_text != ""))
+    paste0("Sample number(s) ", paste(sample_number[is_empty & dilution_text != ""], collapse = ", "),
+           " are marked empty but have a start_dilution. Leave the dilution blank for empty positions.")),
+  with(sample_map, if (any(!is_empty & sample_name != "" & is.na(start_dilution)))
+    paste0("Missing or non-numeric start_dilution for: ",
+           paste(sample_name[!is_empty & sample_name != "" & is.na(start_dilution)], collapse = ", ")))
+)
+if (length(input_problems) > 0) {
+  stop(paste(input_problems, collapse = "\n"), call. = FALSE)
 }
-if (anyDuplicated(sample_map$sample_number)) {
-  stop("Duplicate sample numbers found in sample map.")
+
+if (any(sample_map$is_empty)) {
+  message("Sample number(s) marked empty and not analysed: ",
+          paste(sample_map$sample_number[sample_map$is_empty], collapse = ", "))
 }
-if (anyNA(sample_map$start_dilution)) {
-  stop("Missing start_dilution for sample number(s): ",
-       paste(sample_map$sample_number[is.na(sample_map$start_dilution)], collapse = ", "))
-}
+
+sample_map <- sample_map %>%
+  filter(!is_empty, sample_number %in% 1:n_positions) %>%
+  dplyr::select(sample_number, sample_name, start_dilution)
 
 sample_map
 
@@ -199,7 +244,7 @@ mab_wells <- expand.grid(row = c("G", "H"), col = 1:12, stringsAsFactors = FALSE
   dplyr::select(well, sample_number, sample_name, mab_ug_ml, replicate, type)
 
 # Sample wells: samples 1-20 run down rows C-F in each pair of columns (3-4, 5-6, ... 11-12)
-sample_layout <- tibble(sample_number = 1:20) %>%
+sample_layout <- tibble(sample_number = 1:n_positions) %>%
   mutate(
     row = c("C", "D", "E", "F")[(sample_number - 1) %% 4 + 1],
     first_col = 3 + 2 * ((sample_number - 1) %/% 4)

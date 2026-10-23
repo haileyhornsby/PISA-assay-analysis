@@ -13,32 +13,36 @@
 Put both files in the same folder:
 
 1. **MSD export (.txt)** in the "each spot as plate" format.
-2. **Sample map (.csv)** with **exactly the same file name** as the .txt. It needs these headers:
+2. **Sample map (.csv)**: copy **`IL-8_sample_map_template.csv`**, fill it in, and save it with **exactly the same file name** as the .txt (only the ending differs). The template already has these headers and a row for every position:
 
    | sample_number | sample_name | start_dilution |
-   |---|---|---|
-   | 1 | Sample_01 | 20 |
-   | 2 | Sample_02 | 20 |
-   | ... | ... | ... |
+   |:-------------:|:-----------:|:--------------:|
+   |       1       |  Sample_01  |       20       |
+   |       2       |  Sample_02  |       20       |
+   |      ...      |     ...     |      ...       |
+   |      16       |    empty    |                |
 
    `sample_number` is 1–16, following the plate layout below. `start_dilution` is the reciprocal starting dilution.
 
+   **Every position 1–16 must have a row.** For an unused position, write `empty` as the sample_name and leave start_dilution blank. The script stops with a message if a sample_name is blank or a position number is missing from the file, so a forgotten entry can't be mistaken for an unused position. It also stops if an `empty` position has a dilution, or a sample has no dilution.
+
 ## Plate layout
 
-| | 1–8 | 9 | 10 | 11 | 12 |
-|---|---|---|---|---|---|
-| **A–D** | Samples 1–8 (one per column, 3-fold dilutions down rows A–D) | Max IL-8 (A–B) / Min IL-8 (C–D) | Max IL-8 (A–B) / Min IL-8 (C–D) | Calibrators 1–4 | Calibrators 1–4 |
-| **E–H** | Samples 9–16 (one per column, 3-fold dilutions down rows E–H) | IVIG | IVIG | Calibrators 5–7, blank (H) | Calibrators 5–7, blank (H) |
+|       |    1     |     2     |     3     |     4     |     5     |     6     |     7     |     8     |    9     |    10    |  11   |  12   |
+|:-----:|:--------:|:---------:|:---------:|:---------:|:---------:|:---------:|:---------:|:---------:|:--------:|:--------:|:-----:|:-----:|
+| **A** | Sample 1 | Sample 2  | Sample 3  | Sample 4  | Sample 5  | Sample 6  | Sample 7  | Sample 8  | Max IL-8 | Max IL-8 | Cal 1 | Cal 1 |
+| **B** | Sample 1 | Sample 2  | Sample 3  | Sample 4  | Sample 5  | Sample 6  | Sample 7  | Sample 8  | Max IL-8 | Max IL-8 | Cal 2 | Cal 2 |
+| **C** | Sample 1 | Sample 2  | Sample 3  | Sample 4  | Sample 5  | Sample 6  | Sample 7  | Sample 8  | Min IL-8 | Min IL-8 | Cal 3 | Cal 3 |
+| **D** | Sample 1 | Sample 2  | Sample 3  | Sample 4  | Sample 5  | Sample 6  | Sample 7  | Sample 8  | Min IL-8 | Min IL-8 | Cal 4 | Cal 4 |
+| **E** | Sample 9 | Sample 10 | Sample 11 | Sample 12 | Sample 13 | Sample 14 | Sample 15 | Sample 16 |   IVIG   |   IVIG   | Cal 5 | Cal 5 |
+| **F** | Sample 9 | Sample 10 | Sample 11 | Sample 12 | Sample 13 | Sample 14 | Sample 15 | Sample 16 |   IVIG   |   IVIG   | Cal 6 | Cal 6 |
+| **G** | Sample 9 | Sample 10 | Sample 11 | Sample 12 | Sample 13 | Sample 14 | Sample 15 | Sample 16 |   IVIG   |   IVIG   | Cal 7 | Cal 7 |
+| **H** | Sample 9 | Sample 10 | Sample 11 | Sample 12 | Sample 13 | Sample 14 | Sample 15 | Sample 16 |   IVIG   |   IVIG   | Blank | Blank |
 
-## Settings (Section 2)
-
-| Setting | Default | Change when |
-|---|---|---|
-| `msd_file` | – | Every run: the full path to the .txt export |
-| `cal_concentrations` | 583 pg/mL top, 4-fold | **Check against the IL-8 certificate of analysis for each lot** |
-| `dilution_factor`, `n_sample_points` | 3-fold, 4 points | The sample dilution series changes |
-| `ivig_start_dilution` | 12.5 | The IVIG dilution series changes |
-| `sample_dilution_correction` | 50 | The dilution in the MSD step changes |
+- **Samples 1–16:** one per column, 4-point dilution series. Rows A and E are the starting dilution, and each row down is a further 3-fold dilution.
+- **Max IL-8 / Min IL-8:** controls for uncleaved and fully cleaved IL-8 (4 wells each).
+- **IVIG:** in duplicate, starting at 1:12.5, with 3-fold dilutions down rows E–H.
+- **Cal 1–7:** IL-8 calibrators in duplicate, 4-fold dilutions from the top concentration on the certificate of analysis. The concentrations are set in the script. Tell the script maintainer when a new IL-8 lot is introduced, so the script can be updated. **Blank** is the assay blank.
 
 ## Outputs
 
@@ -67,9 +71,9 @@ QC flags duplicate CVs above 5% for the calibrators, controls and IVIG.
 
 ## IC50 status
 
-| Status | Meaning |
-|---|---|
-| Interpolated | IC50 within the dilution series |
-| Insufficient activity | IL-8 stays below the 50% value at every dilution. The IC50 is assigned as half the starting dilution. |
+| Status                 | Meaning                                                                                                 |
+|------------------------|---------------------------------------------------------------------------------------------------------|
+| Interpolated           | IC50 within the dilution series                                                                         |
+| Insufficient activity  | IL-8 stays below the 50% value at every dilution. The IC50 is assigned as half the starting dilution.   |
 | High activity - retest | IL-8 stays above the 50% value, so the IC50 is beyond the dilution series. Repeat at a higher dilution. |
-| No result | Too few valid points to calculate an IC50 |
+| No result              | Too few valid points to calculate an IC50                                                               |

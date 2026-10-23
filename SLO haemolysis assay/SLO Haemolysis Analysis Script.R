@@ -7,15 +7,14 @@ script_version <- "1.0"
 # Plate OD540 -> % haemolysis -> % inhibition -> 4PL fit -> IC50
 
 # Necessary input file
-# a .csv file made from "SLO_plate_template.csv":
-#   - "Sample ID" row: sample names for plate columns 1-10 (IVIG in 11, Controls in 12)
-#   - "Starting dilution" row: reciprocal starting dilution for each column (e.g. 50 for 1:50)
-#   - rows A-H: raw OD540 values copied from the plate reader (columns 1-12)
-# Leave the Sample ID blank for any unused columns.
+# a .csv file made from "SLO_plate_template.csv", containing:
+#   - columns A-C: plate column 1-10, Sample ID and reciprocal starting dilution (e.g. 50 for 1:50)
+#   - to the right: the 8 x 12 grid of raw OD540 values copied from the plate reader (rows A-H)
+# For an unused column, write empty as the Sample ID and leave the dilution blank.
 
 # Plate layout
-# Columns 1-10: samples (singlicate), 2-fold dilutions down rows A-H
-# Column 11: IVIG, 2-fold dilutions down rows A-H
+# Columns 1-10: samples (run in singlicate), 2-fold dilutions down rows A-H
+# Column 11: IVIG, 2-fold dilutions down rows A-H (fixed, not entered in the input file)
 # Column 12: no haemolysis controls (A-D) and max haemolysis controls (E-H)
 
 
@@ -24,7 +23,7 @@ script_version <- "1.0"
 # ----------------------------
 
 # Install any missing packages (only needed the first time), then load them
-required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx", "drc")
+required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx", "rstudioapi", "drc")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing_packages) > 0) {
   message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
@@ -39,11 +38,32 @@ library(openxlsx)
 library(drc)
 options(scipen = 999)
 
+# Opens a window to choose the input file (in RStudio), or a standard file dialog otherwise
+choose_input_file <- function(caption, filter) {
+  message(caption)
+  path <- if (rstudioapi::isAvailable()) {
+    rstudioapi::selectFile(caption = caption, filter = filter)
+  } else {
+    file.choose()
+  }
+  if (is.null(path) || !nzchar(path)) {
+    stop("No file was chosen. Run the script again and choose the input file.", call. = FALSE)
+  }
+  normalizePath(path, winslash = "/")
+}
+
 # ----------------------------
-# 2. Files and assay settings
+# 2. Input file
 # ----------------------------
 
-plate_file <- "C:/path/to/SLO_hemolysis_DD-MM-YY.csv" # paste the full path to the plate .csv here (use / not \)
+# When the script runs, a window opens: choose the plate .csv made from SLO_plate_template.csv
+plate_file <- choose_input_file("Choose the SLO plate .csv (made from SLO_plate_template.csv)", "CSV files (*.csv)")
+
+# ----------------------------------------------
+# Fixed assay information - do not change
+# ----------------------------------------------
+
+# Output files are saved next to the input file
 output_file <- file.path(
   dirname(plate_file),
   paste0(tools::file_path_sans_ext(basename(plate_file)), "_analysis.xlsx"))
@@ -54,6 +74,7 @@ plot_dir <- file.path(
 # Plate layout
 sample_cols <- 1:10 # sample columns, one dilution series per column
 ivig_col <- 11 # IVIG dilution series
+ivig_start_dilution <- 50 # IVIG starts at 1:50
 control_col <- 12 # haemolysis controls
 no_haem_rows <- c("A", "B", "C", "D") # no haemolysis (PBS-DTT, no toxin)
 max_haem_rows <- c("E", "F", "G", "H") # maximum haemolysis (toxin, no serum)
@@ -61,10 +82,10 @@ max_haem_rows <- c("E", "F", "G", "H") # maximum haemolysis (toxin, no serum)
 # Dilution series
 dilution_factor <- 2 # 2-fold steps down rows A-H
 n_points <- 8 # each dilution series is 8 wells long
-# starting dilution for each column is entered in the plate .csv
+# starting dilution for each sample is entered in the plate .csv
 
 # QC
-control_cv_limit <- 10 # control replicates are flagged if CV > 10%
+control_cv_limit <- 10 # PROVISIONAL: control replicates are flagged if CV > 10%
 exclude_control_outliers <- TRUE # if CV > limit, drop the single control well that brings the other 3 within the limit
 dynamic_range <- c(25, 75) # a usable curve needs at least one point below 25% and one above 75% inhibition
 
@@ -79,20 +100,20 @@ raw <- read_csv(
   trim_ws = TRUE
 )
 
-# Find the rows by their label in the first column
-row_labels <- toupper(trimws(raw[[1]]))
-id_row <- which(row_labels == "SAMPLE ID")
-dilution_row <- which(row_labels == "STARTING DILUTION")
-od_rows <- match(LETTERS[1:8], row_labels)
+# Find the header row ('Plate column' in column A) and the OD540 grid to its right
+header_row <- which(toupper(trimws(raw[[1]])) == "PLATE COLUMN")
+od_label_col <- if (length(header_row) == 1) which(toupper(trimws(unlist(raw[header_row, ]))) == "OD540") else integer(0)
 
-if (length(id_row) != 1 || length(dilution_row) != 1 || anyNA(od_rows)) {
-  stop("Could not find the 'Sample ID', 'Starting dilution' and A-H rows. ",
+if (length(header_row) != 1 || length(od_label_col) != 1 ||
+    ncol(raw) < od_label_col + 12 || nrow(raw) < header_row + 8 ||
+    !identical(toupper(trimws(unname(unlist(raw[header_row + 1:8, od_label_col])))), LETTERS[1:8])) {
+  stop("Could not find the 'Plate column' table and the OD540 grid (rows A-H). ",
        "Check the .csv was made from SLO_plate_template.csv.")
 }
 
 # Process OD data into an 8 x 12 data frame with numeric values
 plate <- as.data.frame(
-  lapply(raw[od_rows, 2:13], function(z) as.numeric(z))
+  lapply(raw[header_row + 1:8, od_label_col + 1:12], function(z) suppressWarnings(as.numeric(z)))
 )
 rownames(plate) <- LETTERS[1:8]
 colnames(plate) <- as.character(1:12)
@@ -122,25 +143,54 @@ plate_long <- expand.grid(
 # 4. Read sample IDs and annotate data
 # ------------------------------------
 
-sample_map <- tibble(
-  col = 1:12,
-  sample_name = as.character(unlist(raw[id_row, 2:13])),
-  start_dilution = suppressWarnings(as.numeric(unlist(raw[dilution_row, 2:13])))
-) %>%
-  filter(col %in% c(sample_cols, ivig_col), !is.na(sample_name), sample_name != "") %>%
-  mutate(type = if_else(col == ivig_col, "IVIG", "Sample"))
+# Sample information table: one row per sample column (1-10) in columns A-C below the header
+sample_info <- raw[(header_row + 1):nrow(raw), 1:3] %>%
+  setNames(c("col", "sample_name", "start_dilution")) %>%
+  mutate(col = suppressWarnings(as.integer(col))) %>%
+  filter(col %in% sample_cols)
 
-# Report any columns skipped because they have no Sample ID
-skipped_cols <- setdiff(c(sample_cols, ivig_col), sample_map$col)
-if (length(skipped_cols) > 0) {
-  message("No Sample ID entered for plate column(s) ", paste(skipped_cols, collapse = ", "),
-          " - these columns have not been analysed.")
+missing_cols <- setdiff(sample_cols, sample_info$col)
+if (length(missing_cols) > 0) {
+  stop("Plate column(s) ", paste(missing_cols, collapse = ", "),
+       " are missing from the sample information table.")
 }
 
-if (anyNA(sample_map$start_dilution)) {
-  stop("Missing starting dilution for: ",
-       paste(sample_map$sample_name[is.na(sample_map$start_dilution)], collapse = ", "))
+# Check every column has been filled in. Unused columns must be marked empty
+# (with no dilution), so a forgotten entry is not mistaken for an unused column.
+sample_info <- sample_info %>%
+  mutate(
+    sample_name = trimws(coalesce(sample_name, "")),
+    dilution_text = trimws(coalesce(start_dilution, "")),
+    start_dilution = suppressWarnings(as.numeric(dilution_text)),
+    is_empty = tolower(sample_name) == "empty"
+  )
+
+input_problems <- c(
+  with(sample_info, if (any(sample_name == ""))
+    paste0("No Sample ID for plate column(s) ", paste(col[sample_name == ""], collapse = ", "),
+           ". Enter the Sample ID, or write empty if the column was not used.")),
+  with(sample_info, if (any(is_empty & dilution_text != ""))
+    paste0("Plate column(s) ", paste(col[is_empty & dilution_text != ""], collapse = ", "),
+           " are marked empty but have a starting dilution. Leave the dilution blank for empty columns.")),
+  with(sample_info, if (any(!is_empty & sample_name != "" & is.na(start_dilution)))
+    paste0("Missing or non-numeric starting dilution for: ",
+           paste(sample_name[!is_empty & sample_name != "" & is.na(start_dilution)], collapse = ", ")))
+)
+if (length(input_problems) > 0) {
+  stop(paste(input_problems, collapse = "\n"), call. = FALSE)
 }
+
+if (any(sample_info$is_empty)) {
+  message("Plate column(s) marked empty and not analysed: ",
+          paste(sample_info$col[sample_info$is_empty], collapse = ", "))
+}
+
+# Samples entered by the user, plus the IVIG column (always the same)
+sample_map <- sample_info %>%
+  filter(!is_empty) %>%
+  transmute(col, sample_name, start_dilution, type = "Sample") %>%
+  bind_rows(tibble(col = ivig_col, sample_name = "IVIG",
+                   start_dilution = ivig_start_dilution, type = "IVIG"))
 
 if (anyDuplicated(sample_map$sample_name)) {
   warning("Duplicate sample IDs found: ",
@@ -266,7 +316,7 @@ plate_pct <- plate_long %>%
 
 # 4PL with the bottom fixed at 0% and the top at 100% inhibition, so the
 # IC50 is the dilution giving 50% inhibition. The best fit is found from
-# many starting values (as in the MSD scripts), then passed to drc to
+# many starting values, then passed to drc to
 # calculate a 95% confidence interval for the IC50.
 
 inhibition_4pl <- function(x, Slope, IC50) {
@@ -532,6 +582,7 @@ assay_parameters <- tibble(
   parameter = c(
     "Script version",
     "Plate file",
+    "IVIG starting dilution",
     "Dilution factor",
     "Number of dilution points",
     "Control CV limit (%)",
@@ -546,6 +597,7 @@ assay_parameters <- tibble(
   value = c(
     script_version,
     plate_file,
+    ivig_start_dilution,
     dilution_factor,
     n_points,
     control_cv_limit,

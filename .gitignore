@@ -10,14 +10,18 @@
 *.RDS
 *.rds
 
-# ...except the SLO plate template
+# ...except the input templates
 !SLO haemolysis assay/SLO_plate_template.csv
+!10-plex MSD assay/10-plex_sample_map_template.csv
+!SpyCEP IL-8 assay/IL-8_sample_map_template.csv
 
-# R and RStudio files
+# R and RStudio files (including README previews)
 .Rhistory
 .RData
 .Rproj.user/
+*.Rproj
 Rplots.pdf
+*.html
 
 # Windows / Mac system files
 Thumbs.db

@@ -23,7 +23,7 @@ script_version <- "1.0"
 # ----------------------------
 
 # Install any missing packages (only needed the first time), then load them
-required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx")
+required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx", "rstudioapi")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing_packages) > 0) {
   message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
@@ -36,11 +36,32 @@ library(ggplot2)
 library(openxlsx)
 options(scipen = 999)
 
+# Opens a window to choose the input file (in RStudio), or a standard file dialog otherwise
+choose_input_file <- function(caption, filter) {
+  message(caption)
+  path <- if (rstudioapi::isAvailable()) {
+    rstudioapi::selectFile(caption = caption, filter = filter)
+  } else {
+    file.choose()
+  }
+  if (is.null(path) || !nzchar(path)) {
+    stop("No file was chosen. Run the script again and choose the input file.", call. = FALSE)
+  }
+  normalizePath(path, winslash = "/")
+}
+
 # ----------------------------
-# 2. Files and assay settings
+# 2. Input file
 # ----------------------------
 
-msd_file <- "C:/path/to/plate_each spot as plate.txt" # paste the full path to the MSD .txt file here (use / not \)
+# When the script runs, a window opens: choose the MSD .txt export (each spot as plate)
+msd_file <- choose_input_file("Choose the MSD .txt export (each spot as plate)", "Text files (*.txt)")
+
+# ----------------------------------------------
+# Fixed assay information - do not change
+# ----------------------------------------------
+
+# The sample map is read from, and output files are saved to, the same folder as the MSD file
 sample_map_file <- file.path(
   dirname(msd_file),
   paste0(tools::file_path_sans_ext(basename(msd_file)), ".csv"))
@@ -62,11 +83,15 @@ n_ivig_points <- 4 # IVIG series is 4 wells long
 
 # IL-8 calibration concentrations (pg/mL)
 # Calibrators 1-7 are the standard curve, 8 is the assay blank
-cal_concentrations <- 583 * 4^-(0:6) # adjust starting conc of the curve based on COA information, 4-fold steps
+cal_concentrations <- 583 * 4^-(0:6) # top concentration from the IL-8 certificate of analysis, 4-fold steps
+# (updated by the maintainer, with a new script version, when a new IL-8 lot is used)
 
 # Sample conversion
 sample_dilution_correction <- 50 # a 50x correction factor is applied due to dilution for the MSD assay
 pg_to_ng <- 1 / 1000
+
+# QC
+qc_cv_limit <- 5 # PROVISIONAL: calibrator, control and IVIG duplicates are flagged if CV > 5%
 
 # ------------------------------
 # 3. Read in the MSD plate data
@@ -155,16 +180,50 @@ plate_long <- expand.grid(
 
 sample_map <- read_csv(
   sample_map_file,
-  show_col_types = FALSE
+  col_types = cols(.default = col_character())
 ) %>%
   mutate(
-    sample_number = as.integer(sample_number),
-    sample_name = as.character(sample_name),
-    start_dilution = as.numeric(start_dilution)
+    sample_number = suppressWarnings(as.integer(sample_number)),
+    sample_name = trimws(coalesce(sample_name, "")),
+    dilution_text = trimws(coalesce(start_dilution, "")),
+    start_dilution = suppressWarnings(as.numeric(dilution_text)),
+    is_empty = tolower(sample_name) == "empty"
   ) %>%
   arrange(sample_number)
 
-sample_annotation <- lapply(1:16, function(i) {
+# Check every plate position has been filled in. Unused positions must be marked
+# empty (with no dilution), so a forgotten entry is not mistaken for an unused position.
+missing_numbers <- setdiff(1:16, sample_map$sample_number)
+input_problems <- c(
+  if (length(missing_numbers) > 0)
+    paste0("Sample number(s) ", paste(missing_numbers, collapse = ", "),
+           " are missing from the sample map. Add a row for every position 1-16 (write empty if unused)."),
+  if (anyDuplicated(sample_map$sample_number))
+    "Duplicate sample numbers found in the sample map.",
+  with(sample_map, if (any(sample_name == ""))
+    paste0("No sample_name for sample number(s) ", paste(sample_number[sample_name == ""], collapse = ", "),
+           ". Enter the sample name, or write empty if the position was not used.")),
+  with(sample_map, if (any(is_empty & dilution_text != ""))
+    paste0("Sample number(s) ", paste(sample_number[is_empty & dilution_text != ""], collapse = ", "),
+           " are marked empty but have a start_dilution. Leave the dilution blank for empty positions.")),
+  with(sample_map, if (any(!is_empty & sample_name != "" & is.na(start_dilution)))
+    paste0("Missing or non-numeric start_dilution for: ",
+           paste(sample_name[!is_empty & sample_name != "" & is.na(start_dilution)], collapse = ", ")))
+)
+if (length(input_problems) > 0) {
+  stop(paste(input_problems, collapse = "\n"), call. = FALSE)
+}
+
+if (any(sample_map$is_empty)) {
+  message("Sample number(s) marked empty and not analysed: ",
+          paste(sample_map$sample_number[sample_map$is_empty], collapse = ", "))
+}
+
+sample_map <- sample_map %>%
+  filter(!is_empty, sample_number %in% 1:16) %>%
+  dplyr::select(sample_number, sample_name, start_dilution)
+
+sample_annotation <- lapply(sample_map$sample_number, function(i) {
   if (i <= 8) {
     rows <- LETTERS[1:4]
     col <- i
@@ -326,7 +385,7 @@ calibration_qc <- cal_wells %>%
       100 * sd(signal, na.rm = TRUE) / mean_signal,
       2
     ),
-    cv_qc = if_else(cv_percent <= 5, "PASS", "FLAG"), # flag if duplicate CV > 5%
+    cv_qc = if_else(cv_percent <= qc_cv_limit, "PASS", "FLAG"), # flag if duplicate CV > limit
     .groups = "drop"
   )
 
@@ -342,7 +401,7 @@ control_qc <- control_wells %>%
       2
     ),
     cv_qc = if_else(
-      cv_percent <= 5,
+      cv_percent <= qc_cv_limit,
       "PASS",
       "FLAG"
     ),
@@ -363,7 +422,7 @@ ivig_qc <- ivig_wells %>%
       2
     ),
     cv_qc = if_else(
-      cv_percent <= 5, # duplicates are flagged if > 5% CV
+      cv_percent <= qc_cv_limit, # duplicates are flagged if CV > limit
       "PASS",
       "FLAG"
     ),

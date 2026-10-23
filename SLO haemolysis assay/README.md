@@ -13,27 +13,39 @@ The plate reader software differs between sites, so the OD values are copied int
 
 1. Copy **`SLO_plate_template.csv`** and rename it after the run, e.g. `SLO_hemolysis_24-10-26.csv`.
 2. Open it in Excel and fill in:
-   - **Sample ID** row: sample names for plate columns 1–10. Leave unused columns blank; they are skipped and listed in a message. Column 11 is IVIG and column 12 the controls.
-   - **Starting dilution** row: the reciprocal starting dilution of each column (50 = 1:50).
-   - **Rows A–H:** paste the 8 × 12 block of OD540 values from the plate reader.
+   - **Columns A–C (sample information):** one row for each sample column 1–10 on the plate. Enter the Sample ID and the reciprocal starting dilution (50 = 1:50).
+   - **The OD540 grid (to the right of sample info):** paste the 8 × 12 block of OD540 values from the plate reader into the grid, starting in the cell under **1** and next to **A**.
+
+   | A: Plate column | B: Sample ID | C: Starting dilution |     | E: OD540 |  1   |  2   | ... |  12  |
+   |:---------------:|:------------:|:--------------------:|:---:|:--------:|:----:|:----:|:---:|:----:|
+   |        1        |  Sample_01   |          50          |     |    A     | 0.05 | 0.04 | ... | 0.04 |
+   |        2        |  Sample_02   |          50          |     |    B     | 0.26 | 0.15 | ... | 0.04 |
+   |       ...       |     ...      |         ...          |     |   ...    | ...  | ...  | ... | ...  |
+   |       10        |    empty     |                      |     |          |      |      |     |      |
+
 3. Save the file as .csv.
+
+**Every sample column 1–10 must be filled in.** For an unused column, write `empty` as the Sample ID and leave the dilution blank. The script stops with a message if a Sample ID is blank, so a forgotten entry can't be mistaken for an unused column. It also stops if an `empty` column has a dilution, or a sample has no dilution.
+
+The IVIG (column 11) and the controls (column 12) are the same on every plate, so they're set in the script and don't need entering.
 
 ## Plate layout
 
-| | 1–10 | 11 | 12 |
-|---|---|---|---|
-| **A–D** | Samples (one per column, singlicate, 2-fold dilutions down rows A–H) | IVIG (2-fold dilutions down rows A–H) | No haemolysis |
-| **E–H** | | | Max haemolysis |
+|       |    1     |    2     |    3     |    4     |    5     |    6     |    7     |    8     |    9     |    10     |  11  |    12    |
+|:-----:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:--------:|:---------:|:----:|:--------:|
+| **A** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | No haem  |
+| **B** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | No haem  |
+| **C** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | No haem  |
+| **D** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | No haem  |
+| **E** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | Max haem |
+| **F** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | Max haem |
+| **G** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | Max haem |
+| **H** | Sample 1 | Sample 2 | Sample 3 | Sample 4 | Sample 5 | Sample 6 | Sample 7 | Sample 8 | Sample 9 | Sample 10 | IVIG | Max haem |
 
-## Settings (Section 2)
-
-| Setting | Default | Change when |
-|---|---|---|
-| `plate_file` | – | Every run: the full path to the .csv |
-| `dilution_factor`, `n_points` | 2-fold, 8 points | The dilution series changes |
-| `control_cv_limit` | 10% | QC criteria change |
-| `exclude_control_outliers` | TRUE | Set to FALSE to turn off automatic exclusion of a control well |
-| `dynamic_range` | 25–75% | The curve-acceptance criteria change |
+- **Samples 1–10:** one per column, run in singlicate. Row A is the starting dilution entered in the input file, and each row down is a further 2-fold dilution (e.g. 1:50 to 1:6,400).
+- **IVIG:** in singlicate, from 1:50 to 1:6,400 in 2-fold dilutions.
+- **No haem:** no haemolysis control (PBS-DTT, no toxin), giving 0% haemolysis.
+- **Max haem:** maximum haemolysis control (toxin, no serum), giving 100% haemolysis.
 
 ## Control QC
 
@@ -67,10 +79,10 @@ Saved next to the .csv file:
 
 An IC50 is only reported when the curve crosses 50% inhibition and includes at least one point below 25% and one above 75% inhibition. Samples outside the range of the assay are retested, and no value is assigned.
 
-| Status | Meaning |
-|---|---|
-| Interpolated | Valid IC50 |
-| High activity - retest | All wells above 50% inhibition. Retest at a higher starting dilution. |
-| Insufficient activity - retest | All wells below 50% inhibition. Retest at a lower starting dilution. |
-| Partial curve - check | Crosses 50%, but does not include a point below 25% and one above 75% inhibition |
-| No result | Curve could not be fitted |
+| Status                         | Meaning                                                                          |
+|--------------------------------|----------------------------------------------------------------------------------|
+| Interpolated                   | Valid IC50                                                                       |
+| High activity - retest         | All wells above 50% inhibition. Retest at a higher starting dilution.            |
+| Insufficient activity - retest | All wells below 50% inhibition. Retest at a lower starting dilution.             |
+| Partial curve - check          | Crosses 50%, but does not include a point below 25% and one above 75% inhibition |
+| No result                      | Curve could not be fitted                                                        |
