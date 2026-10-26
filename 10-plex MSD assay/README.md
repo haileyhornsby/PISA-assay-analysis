@@ -56,6 +56,7 @@ Saved next to the .txt file:
   - Sample results: full detail
   - **Results summary**: AU/mL, one row per sample and one column per antigen
   - **Status summary**
+  - **Control summary**: the MSD controls and mAb pool values, used by the Control Tracking Script
   - Plots
 - **`[file name]_plots/`** with 4 plots:
   1. calibration curves

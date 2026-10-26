@@ -51,6 +51,20 @@ choose_input_file <- function(caption, filter) {
   normalizePath(path, winslash = "/")
 }
 
+# Date the plate was run: taken from the file name if it contains a date
+# (e.g. 2026-09-29 in MSD exports, or 06-05-26), otherwise the date the file was last modified
+plate_date <- function(path) {
+  name <- basename(path)
+  iso <- regmatches(name, regexpr("20[0-9]{2}-[01][0-9]-[0-3][0-9]", name))
+  if (length(iso) == 1) return(as.Date(iso))
+  dmy <- regmatches(name, regexpr("[0-3][0-9][-_.][01][0-9][-_.]([0-9]{4}|[0-9]{2})", name))
+  if (length(dmy) == 1) {
+    dmy <- gsub("[_.]", "-", dmy)
+    return(as.Date(dmy, format = if (nchar(dmy) == 10) "%d-%m-%Y" else "%d-%m-%y"))
+  }
+  as.Date(file.mtime(path))
+}
+
 # ----------------------------
 # 2. Input file
 # ----------------------------
@@ -80,6 +94,7 @@ control_dilutions <- c("MSD - ctrl 1" = 50000, "MSD - ctrl 2" = 200000, "MSD - c
 mab_start_ug_ml <- 1 # mAb 1 contains 1 ug/mL of each individual mAb
 mab_dilution_factor <- 4 # mAb 2-12 are 4-fold dilutions
 mab_target_antigens <- c("GAC", "ScpA", "SpyAD", "SpyCEP") # antigens recognised by the mAb pool
+mab_tracking_point <- 4 # PROVISIONAL: mAb dilution tracked across plates (mAb 4 = 0.0156 ug/mL); choose once real mAb data are available
 
 # QC
 cal_cv_limit <- 15 # PROVISIONAL: calibrator duplicates are flagged if CV > 15%
@@ -665,6 +680,31 @@ results_summary
 sample_results %>%
   count(result_status)
 
+# Control summary: one row per control value, in the same format for every plate,
+# so the Control Tracking Script can follow the controls across plates
+control_summary <- bind_rows(
+  control_results %>%
+    transmute(control = sample_name, measure = antigen, unit = "AU/mL",
+              value = if_else(result_status == "Interpolated", corrected_AU_ml, NA_real_),
+              cv_percent, status = result_status),
+  mab_results %>%
+    filter(target_antigen, sample_name == paste("mAb", mab_tracking_point)) %>%
+    transmute(control = paste0("mAb pool (", sample_name, ")"), measure = antigen, unit = "AU/mL in well",
+              value = if_else(result_status == "Interpolated", interpolated_AU_ml, NA_real_),
+              cv_percent, status = result_status)
+) %>%
+  mutate(
+    assay = "10-plex MSD",
+    plate = tools::file_path_sans_ext(basename(msd_file)),
+    assay_date = plate_date(msd_file),
+    analysis_date = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    script_version = script_version,
+    .before = 1
+  )
+
+control_summary %>%
+  print(n = Inf)
+
 # -------------------------------------------
 # 11. Generate an assay / results output file
 # -------------------------------------------
@@ -759,6 +799,9 @@ writeData(wb, "Results summary", results_summary)
 
 addWorksheet(wb, "Status summary")
 writeData(wb, "Status summary", status_summary)
+
+addWorksheet(wb, "Control summary")
+writeData(wb, "Control summary", control_summary)
 
 # Add plots to workbook
 addWorksheet(wb, "Plots")

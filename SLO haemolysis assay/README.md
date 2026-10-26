@@ -69,6 +69,7 @@ Saved next to the .csv file:
   - Sample results
   - IC50 results
   - **IC50 summary**
+  - **Control summary**: IVIG IC50 and control values, used by the Control Tracking Script
   - Plots
 - **`[file name]_plots/`** with 3 plots:
   1. % haemolysis plate heatmap

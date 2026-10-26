@@ -7,8 +7,9 @@ R scripts for analysing the PISA *Streptococcus pyogenes* serology and functiona
 | 10-plex GAS antigen MSD serology           | SOP 1 | [10-plex MSD assay]    | `10-plex GAS MSD Analysis Script.R` | `10-plex_sample_map_template.csv` |
 | SpyCEP IL-8 cleavage (neutralisation)      | SOP 2 | [SpyCEP IL-8 assay]    | `IL-8 MSD Analysis Script.R`        | `IL-8_sample_map_template.csv`    |
 | SLO haemolysis inhibition (neutralisation) | SOP 3 | [SLO haemolysis assay] | `SLO Haemolysis Analysis Script.R`  | `SLO_plate_template.csv`          |
+| Control tracking (all assays)              | –     | [Control tracking]     | `Control Tracking Script.R`         | –                                 |
 
-Each assay folder has a README with the plate layout, how to fill in the input template, and how to read the results.
+Each assay folder has a README with the plate layout, how to fill in the input template, and how to read the results. The **Control tracking** script follows each assay's controls across plates; see its README.
 
 You never need to edit the scripts. When you run one, a window opens and you choose your data file.
 
@@ -119,3 +120,4 @@ Please **don't edit the scripts**, because every lab needs to use identical anal
 [10-plex MSD assay]: 10-plex%20MSD%20assay
 [SpyCEP IL-8 assay]: SpyCEP%20IL-8%20assay
 [SLO haemolysis assay]: SLO%20haemolysis%20assay
+[Control tracking]: Control%20tracking

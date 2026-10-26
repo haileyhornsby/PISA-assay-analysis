@@ -60,6 +60,7 @@ Saved next to the .txt file:
   - Sample results
   - IC50 results
   - **IC50 summary**
+  - **Control summary**: IVIG IC50 and control values, used by the Control Tracking Script
   - Plots
 - **`[file name]_plots/`** with 4 plots:
   1. standard curve

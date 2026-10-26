@@ -2,7 +2,7 @@
 # PISA SLO haemolysis inhibition assay.
 # Master copy: https://github.com/haileyhornsby/PISA-assay-analysis
 
-script_version <- "1.0"
+script_version <- "1.1"
 
 # Plate OD540 -> % haemolysis -> % inhibition -> 4PL fit -> IC50
 
@@ -50,6 +50,20 @@ choose_input_file <- function(caption, filter) {
     stop("No file was chosen. Run the script again and choose the input file.", call. = FALSE)
   }
   normalizePath(path, winslash = "/")
+}
+
+# Date the plate was run: taken from the file name if it contains a date
+# (e.g. 2026-09-29 in MSD exports, or 06-05-26), otherwise the date the file was last modified
+plate_date <- function(path) {
+  name <- basename(path)
+  iso <- regmatches(name, regexpr("20[0-9]{2}-[01][0-9]-[0-3][0-9]", name))
+  if (length(iso) == 1) return(as.Date(iso))
+  dmy <- regmatches(name, regexpr("[0-3][0-9][-_.][01][0-9][-_.]([0-9]{4}|[0-9]{2})", name))
+  if (length(dmy) == 1) {
+    dmy <- gsub("[_.]", "-", dmy)
+    return(as.Date(dmy, format = if (nchar(dmy) == 10) "%d-%m-%Y" else "%d-%m-%y"))
+  }
+  as.Date(file.mtime(path))
 }
 
 # ----------------------------
@@ -557,6 +571,28 @@ ic50_summary <- ic50_results %>%
 
 ic50_summary
 
+# Control summary: one row per control value, in the same format for every plate,
+# so the Control Tracking Script can follow the controls across plates
+ivig_result <- ic50_results %>% filter(type == "IVIG")
+
+control_summary <- bind_rows(
+  tibble(control = "IVIG", measure = "IC50", unit = "reciprocal dilution",
+         value = ivig_result$ic50_dilution, status = ivig_result$ic50_status),
+  control_qc %>%
+    transmute(control = type, measure = "OD540", unit = "OD", value = mean_OD,
+              cv_percent, status = cv_qc)
+) %>%
+  mutate(
+    assay = "SLO haemolysis",
+    plate = tools::file_path_sans_ext(basename(plate_file)),
+    assay_date = plate_date(plate_file),
+    analysis_date = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    script_version = script_version,
+    .before = 1
+  )
+
+control_summary
+
 # -------------------------------------------
 # 10. Generate an assay / results output file
 # -------------------------------------------
@@ -638,6 +674,9 @@ writeData(wb, "IC50 results", ic50_results)
 
 addWorksheet(wb, "IC50 summary")
 writeData(wb, "IC50 summary", ic50_summary)
+
+addWorksheet(wb, "Control summary")
+writeData(wb, "Control summary", control_summary)
 
 # Add plots to workbook
 addWorksheet(wb, "Plots")

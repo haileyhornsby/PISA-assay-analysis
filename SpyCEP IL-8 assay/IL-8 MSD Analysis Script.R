@@ -2,7 +2,7 @@
 # PISA IL-8 SpyCEP cleavage assay.
 # Master copy: https://github.com/haileyhornsby/PISA-assay-analysis
 
-script_version <- "1.0"
+script_version <- "1.1"
 
 # MSD export -> calibration -> interpolation -> IC50
 
@@ -48,6 +48,20 @@ choose_input_file <- function(caption, filter) {
     stop("No file was chosen. Run the script again and choose the input file.", call. = FALSE)
   }
   normalizePath(path, winslash = "/")
+}
+
+# Date the plate was run: taken from the file name if it contains a date
+# (e.g. 2026-09-29 in MSD exports, or 06-05-26), otherwise the date the file was last modified
+plate_date <- function(path) {
+  name <- basename(path)
+  iso <- regmatches(name, regexpr("20[0-9]{2}-[01][0-9]-[0-3][0-9]", name))
+  if (length(iso) == 1) return(as.Date(iso))
+  dmy <- regmatches(name, regexpr("[0-3][0-9][-_.][01][0-9][-_.]([0-9]{4}|[0-9]{2})", name))
+  if (length(dmy) == 1) {
+    dmy <- gsub("[_.]", "-", dmy)
+    return(as.Date(dmy, format = if (nchar(dmy) == 10) "%d-%m-%Y" else "%d-%m-%y"))
+  }
+  as.Date(file.mtime(path))
 }
 
 # ----------------------------
@@ -826,7 +840,7 @@ calibration_curve_samples <- ggplot() +
     subtitle = paste0(
       "Assay range: ",
       round(min_il8_ng_ml, 3),
-      "–",
+      "-",
       round(max_il8_ng_ml, 2),
       " ng/mL"
     ),
@@ -1004,6 +1018,31 @@ ic50_summary <- ic50_results %>%
 
 ic50_summary
 
+# Control summary: one row per control value, in the same format for every plate,
+# so the Control Tracking Script can follow the controls across plates
+ivig_result <- ic50_results %>% filter(sample_name == "IVIG")
+
+control_summary <- bind_rows(
+  tibble(control = "IVIG", measure = "IC50", unit = "reciprocal dilution",
+         value = if_else(ivig_result$ic50_status == "Interpolated", ivig_result$ic50_dilution, NA_real_),
+         status = ivig_result$ic50_status),
+  assay_limits %>%
+    left_join(control_qc %>% dplyr::select(type, cv_percent, cv_qc), by = "type") %>%
+    transmute(control = type, measure = "IL-8", unit = "ng/mL", value = il8_ng_ml,
+              cv_percent, status = cv_qc),
+  tibble(control = "50% IL-8", measure = "IL-8", unit = "ng/mL", value = il8_50_ng_ml)
+) %>%
+  mutate(
+    assay = "SpyCEP IL-8",
+    plate = tools::file_path_sans_ext(basename(msd_file)),
+    assay_date = plate_date(msd_file),
+    analysis_date = format(Sys.time(), "%Y-%m-%d %H:%M:%S"),
+    script_version = script_version,
+    .before = 1
+  )
+
+control_summary
+
 # -------------------------------------------
 # 13. Generate an assay / results output file
 # -------------------------------------------
@@ -1138,6 +1177,9 @@ writeData(wb, "IC50 results", ic50_results)
 
 addWorksheet(wb, "IC50 summary")
 writeData(wb, "IC50 summary", ic50_summary)
+
+addWorksheet(wb, "Control summary")
+writeData(wb, "Control summary", control_summary)
 
 
 # Add plots to workbook

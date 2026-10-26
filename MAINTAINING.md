@@ -51,6 +51,14 @@ Users never edit the scripts: each script asks for its input file in a pop-up wi
 - **10-plex (`spot_map$top_AU_ml`):** the AU/mL assigned to S1 for each antigen.
 - **QC limits, dilution series, control dilutions and IVIG starting dilutions**, if the SOP changes.
 
+## Control tracking and acceptance criteria
+
+Each assay script writes a **Control summary** sheet, which the `Control tracking` script collects. If you change which controls are tracked, keep the Control summary columns the same (assay, plate, assay_date, analysis_date, script_version, control, measure, unit, value, cv_percent, status), so old and new results files can still be combined.
+
+Once enough plates have been run (around 15–20 per assay), use the summary sheets from the tracking script to agree acceptance criteria for the controls, e.g. IVIG IC50 within the geometric mean ±2 SD, or within 2-fold. Then add the criteria to the SOPs, and to the assay scripts as a QC check with a new script version. Until then, the tracking limits are for information only.
+
+For the 10-plex mAb pool, `mab_tracking_point` sets which mAb dilution is tracked. It is provisional: choose a dilution in the middle of the curve once real mAb data are available.
+
 ## Keeping data out of the repository
 
 The repository is public. The `.gitignore` file stops plate data (`.txt`, `.csv`), results workbooks, plots and R history files being committed. The only exceptions are the three input templates. If you add a new template, add a `!` exception line for it in `.gitignore`. Always check `git status` before committing, and never use `git add -f`, which overrides `.gitignore`.
