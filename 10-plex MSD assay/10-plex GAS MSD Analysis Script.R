@@ -2,7 +2,7 @@
 # PISA GAS 10-plex antibody assay.
 # Master copy: https://github.com/haileyhornsby/PISA-assay-analysis
 
-script_version <- "1.0"
+script_version <- "1.1"
 
 # MSD export -> antigen-specific calibration -> interpolation -> AU/mL
 
@@ -96,7 +96,7 @@ spot_map <- tibble(
   antigen = c("GAC", "DNase B", "SLO", "OppA", "PulA",
               "SpnA", "Spy0843", "SpyAD", "ScpA", "SpyCEP"),
   top_AU_ml = c(3, 4, 20, 3, 4,
-                7, 4, 6, 7, 4) # CHECK: SpnA is 4 AU/mL in the SOP table
+                4, 4, 6, 7, 4) # GAC, DNase B, SLO, OppA, PulA / SpnA, Spy0843, SpyAD, ScpA, SpyCEP
 )
 
 n_positions <- 20 # sample positions on the plate
