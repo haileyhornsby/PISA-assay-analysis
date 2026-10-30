@@ -69,7 +69,7 @@ Saved next to the .txt file:
 | Status                  | Meaning                                                |
 |-------------------------|--------------------------------------------------------|
 | Interpolated            | Valid result (AU/mL corrected for dilution)            |
-| Duplicate CV > 15%      | Duplicates disagree, so the sample is not interpolated |
+| Duplicate CV > 10%      | Duplicates disagree, so the sample is not interpolated |
 | Below calibration range | Signal below the lowest calibrator in the fit          |
 | Above calibration range | Signal above the highest calibrator                    |
 | Interpolation failed    | Signal could not be converted using the fitted curve   |

@@ -68,7 +68,7 @@ Saved next to the .txt file:
   3. standard curve with samples
   4. IC50 regression
 
-QC flags duplicate CVs above 5% for the calibrators, controls and IVIG.
+QC flags duplicate CVs above 10% (provisional) for the calibrators, controls and IVIG.
 
 ## IC50 status
 

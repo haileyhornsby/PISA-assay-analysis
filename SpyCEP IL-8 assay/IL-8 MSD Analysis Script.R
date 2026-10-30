@@ -105,7 +105,7 @@ sample_dilution_correction <- 50 # a 50x correction factor is applied due to dil
 pg_to_ng <- 1 / 1000
 
 # QC
-qc_cv_limit <- 5 # PROVISIONAL: calibrator, control and IVIG duplicates are flagged if CV > 5%
+qc_cv_limit <- 10 # PROVISIONAL: calibrator, control and IVIG duplicates are flagged if CV > 10%
 
 # ------------------------------
 # 3. Read in the MSD plate data

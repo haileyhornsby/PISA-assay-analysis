@@ -98,8 +98,8 @@ mab_target_antigens <- c("GAC", "ScpA", "SpyAD", "SpyCEP") # antigens recognised
 mab_tracking_point <- 4 # PROVISIONAL: mAb dilution tracked across plates (mAb 4 = 0.0156 ug/mL); choose once real mAb data are available
 
 # QC
-cal_cv_limit <- 15 # PROVISIONAL: calibrator duplicates are flagged if CV > 15%
-sample_cv_limit <- 15 # PROVISIONAL: samples and controls with duplicate CV > 15% are not interpolated
+cal_cv_limit <- 10 # PROVISIONAL: calibrator duplicates are flagged if CV > 10%
+sample_cv_limit <- 10 # PROVISIONAL: samples and controls with duplicate CV > 10% are not interpolated
 
 # Calibration curve
 cal_dilution_factor <- 2.5 # calibrators are 2.5-fold steps from Cal-01
