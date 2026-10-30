@@ -23,7 +23,7 @@ script_version <- "1.2"
 # ----------------------------
 
 # Install any missing packages (only needed the first time), then load them
-required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx", "rstudioapi", "drc")
+required_packages <- c("readr", "dplyr", "tidyr", "ggplot2", "openxlsx", "rstudioapi")
 missing_packages <- required_packages[!vapply(required_packages, requireNamespace, logical(1), quietly = TRUE)]
 if (length(missing_packages) > 0) {
   message("Installing missing packages: ", paste(missing_packages, collapse = ", "))
@@ -35,7 +35,6 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(openxlsx)
-library(drc)
 options(scipen = 999)
 
 # Opens a window to choose the input file (in RStudio), or a standard file dialog otherwise
@@ -330,8 +329,7 @@ plate_pct <- plate_long %>%
 
 # 4PL with the bottom fixed at 0% and the top at 100% inhibition, so the
 # IC50 is the dilution giving 50% inhibition. The best fit is found from
-# many starting values, then passed to drc to
-# calculate a 95% confidence interval for the IC50.
+# many starting values, as in the MSD scripts.
 
 inhibition_4pl <- function(x, Slope, IC50) {
   100 / (1 + exp(Slope * (log(x) - log(IC50))))
@@ -395,31 +393,6 @@ fit_4pl <- function(data,
   )
 }
 
-# 95% CI for the IC50 using drc, started from the best fit above
-ic50_ci <- function(data, fit) {
-  drc_fit <- suppressWarnings(try(
-    drm(
-      pct_inhibition ~ dilution,
-      data = data,
-      fct = LL.4(names = c("Slope", "Lower", "Upper", "IC50"), fixed = c(NA, 0, 100, NA)),
-      start = unname(fit$parameters)
-    ),
-    silent = TRUE
-  ))
-  # only use the drc result if it agrees with the best fit
-  if (inherits(drc_fit, "try-error") ||
-      sum(residuals(drc_fit)^2) > fit$SS * 1.001 + 1e-6) {
-    return(c(Lower = NA_real_, Upper = NA_real_))
-  }
-  ed <- suppressWarnings(try(ED(drc_fit, 50, interval = "delta", display = FALSE), silent = TRUE))
-  if (inherits(ed, "try-error")) {
-    return(c(Lower = NA_real_, Upper = NA_real_))
-  }
-  ci <- c(Lower = unname(ed[1, "Lower"]), Upper = unname(ed[1, "Upper"]))
-  ci[!is.finite(ci) | ci <= 0] <- NA_real_ # CI must be > 0
-  ci
-}
-
 curve_fits <- sample_wells %>%
   group_by(col, sample_name, type, start_dilution) %>%
   group_nest() %>%
@@ -432,10 +405,7 @@ ic50_results <- curve_fits %>%
     min_inhibition = min(data$pct_inhibition),
     max_inhibition = max(data$pct_inhibition),
     Slope = if (is.null(fit)) NA_real_ else unname(fit$parameters["Slope"]),
-    calculated_ic50 = if (is.null(fit)) NA_real_ else unname(fit$parameters["IC50"]),
-    ci = list(if (is.null(fit)) c(Lower = NA_real_, Upper = NA_real_) else ic50_ci(data, fit)),
-    ic50_lower_95CI = ci[["Lower"]],
-    ic50_upper_95CI = ci[["Upper"]]
+    calculated_ic50 = if (is.null(fit)) NA_real_ else unname(fit$parameters["IC50"])
   ) %>%
   ungroup() %>%
   mutate(
@@ -457,7 +427,7 @@ ic50_results <- curve_fits %>%
   ) %>%
   dplyr::select(col, sample_name, type, start_dilution, final_dilution,
                 min_inhibition, max_inhibition, Slope, calculated_ic50,
-                ic50_lower_95CI, ic50_upper_95CI, ic50_status, ic50_dilution)
+                ic50_status, ic50_dilution)
 
 # --------------------------------------
 # 8. Plot plate and inhibition curves
@@ -562,10 +532,6 @@ ic50_summary <- ic50_results %>%
     sample_name,
     type,
     ic50 = round(ic50_dilution, 1),
-    ic50_95CI = if_else(
-      !is.na(ic50_dilution) & !is.na(ic50_lower_95CI) & !is.na(ic50_upper_95CI),
-      paste0(round(ic50_lower_95CI, 1), "-", round(ic50_upper_95CI, 1)),
-      NA_character_),
     ic50_status
   )
 

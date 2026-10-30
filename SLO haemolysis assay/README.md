@@ -5,7 +5,7 @@
 **Method:**
 1. Convert OD540 to % haemolysis, using the no-haemolysis (0%) and max-haemolysis (100%) controls, and from that to % inhibition.
 2. Fit a 4PL curve to each sample and IVIG, with the curve fixed at 0% and 100% inhibition. The best fit is chosen from many starting values.
-3. Report the IC50 (the reciprocal dilution giving 50% inhibition) with a 95% confidence interval from `drc`.
+3. Report the IC50: the reciprocal dilution giving 50% inhibition.
 
 ## Input file
 
