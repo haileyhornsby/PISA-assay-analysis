@@ -78,12 +78,12 @@ Saved next to the .csv file:
 
 ## IC50 status
 
-An IC50 is only reported when the curve crosses 50% inhibition and includes at least one point below 25% and one above 75% inhibition. Samples outside the range of the assay are retested, and no value is assigned.
+An IC50 is only reported when the curve crosses 50% inhibition and includes at least one point below 25% and one above 75% inhibition. No value is assigned to samples outside the range of the assay.
 
-| Status                         | Meaning                                                                                                              |
-|--------------------------------|----------------------------------------------------------------------------------------------------------------------|
-| Interpolated                   | Valid IC50                                                                                                           |
-| High activity - retest         | All wells above 50% inhibition. Retest at a higher starting dilution.                                                |
-| Insufficient activity - retest | All wells below 50% inhibition. Retest at a lower starting dilution.                                                 |
-| Partial curve - check          | Crosses 50%, but does not include a point below 25% and one above 75% inhibition                                     |
-| No result - check              | The curve could not be fitted, or the result does not clearly fit any other status. Look at the sample individually. |
+| Status                | Meaning                                                                                                              |
+|-----------------------|----------------------------------------------------------------------------------------------------------------------|
+| Interpolated          | Valid IC50                                                                                                           |
+| High activity         | All wells above 50% inhibition, so the IC50 is above the final dilution                                              |
+| Insufficient activity | All wells below 50% inhibition, so the IC50 is below the starting dilution                                           |
+| Partial curve - check | Crosses 50%, but does not include a point below 25% and one above 75% inhibition                                     |
+| No result - check     | The curve could not be fitted, or the result does not clearly fit any other status. Look at the sample individually. |

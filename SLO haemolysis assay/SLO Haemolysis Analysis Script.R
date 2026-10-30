@@ -416,9 +416,9 @@ ic50_results <- curve_fits %>%
       !is.finite(calculated_ic50) | !is.finite(Slope) ~
         "No result - check", # the curve could not be fitted
       min_inhibition > 50 ~
-        "High activity - retest", # all wells > 50% inhibition; IC50 > final dilution
+        "High activity", # all wells > 50% inhibition; IC50 > final dilution
       max_inhibition < 50 ~
-        "Insufficient activity - retest", # all wells < 50% inhibition; IC50 < starting dilution
+        "Insufficient activity", # all wells < 50% inhibition; IC50 < starting dilution
       min_inhibition > dynamic_range[1] | max_inhibition < dynamic_range[2] ~
         "Partial curve - check", # crosses 50% but does not span 25-75% inhibition
       Slope > 0 & calculated_ic50 >= start_dilution & calculated_ic50 <= final_dilution ~
@@ -426,7 +426,7 @@ ic50_results <- curve_fits %>%
       TRUE ~
         "No result - check"
     ),
-    # out of range samples are retested, so no IC50 is assigned
+    # no IC50 is assigned to samples outside the range of the assay
     ic50_dilution = if_else(ic50_status == "Interpolated", calculated_ic50, NA_real_)
   ) %>%
   dplyr::select(col, sample_name, type, start_dilution, final_dilution,

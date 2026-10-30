@@ -951,7 +951,7 @@ ic50_results <- all_samples %>%
       observed_max_il8 < il8_50_ng_ml ~
         "Insufficient activity", # IL-8 below the 50% value at every dilution
       observed_min_il8 > il8_50_ng_ml ~
-        "High activity - retest", # IL-8 above the 50% value at every dilution
+        "High activity", # IL-8 above the 50% value at every dilution
       is.finite(calculated_ic50) & slope < 0 &
         calculated_ic50 >= min_dilution & calculated_ic50 <= max_dilution ~
         "Interpolated", # crosses the 50% value within the dilution series
