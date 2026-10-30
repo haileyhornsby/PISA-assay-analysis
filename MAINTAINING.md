@@ -70,3 +70,8 @@ If a computer has a copy made before the repository was renamed from `PISA-SpyCE
 git remote set-url origin https://github.com/haileyhornsby/PISA-assay-analysis.git
 git pull
 ```
+
+## Planned changes
+
+- **10-plex:** interpolate ng/mL values for each target antigen in the mAb pool (GAC, ScpA, SpyAD, SpyCEP). Do this once real mAb data are available, and choose `mab_tracking_point` for control tracking at the same time.
+- **All assays:** confirm the duplicate CV limits (currently provisional) and agree acceptance criteria for the controls, using the control tracking summaries.

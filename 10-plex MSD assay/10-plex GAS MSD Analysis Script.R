@@ -2,7 +2,7 @@
 # PISA GAS 10-plex antibody assay.
 # Master copy: https://github.com/haileyhornsby/PISA-assay-analysis
 
-script_version <- "1.1"
+script_version <- "1.2"
 
 # MSD export -> antigen-specific calibration -> interpolation -> AU/mL
 
@@ -94,6 +94,7 @@ control_dilutions <- c("MSD - ctrl 1" = 50000, "MSD - ctrl 2" = 200000, "MSD - c
 mab_start_ug_ml <- 1 # mAb 1 contains 1 ug/mL of each individual mAb
 mab_dilution_factor <- 4 # mAb 2-12 are 4-fold dilutions
 mab_target_antigens <- c("GAC", "ScpA", "SpyAD", "SpyCEP") # antigens recognised by the mAb pool
+# PLANNED: also convert the mAb pool results to ng/mL for each target antigen (not yet implemented)
 mab_tracking_point <- 4 # PROVISIONAL: mAb dilution tracked across plates (mAb 4 = 0.0156 ug/mL); choose once real mAb data are available
 
 # QC
@@ -821,6 +822,13 @@ for (sheet in names(wb)) {
 }
 
 # Save workbook
+# Plate plan: wrap text so each well label shows on two lines (name, then dilution)
+plate_plan_style <- createStyle(wrapText = TRUE, halign = "center", valign = "center")
+addStyle(wb, "Plate plan", plate_plan_style, rows = 1:(nrow(plate_plan) + 1),
+         cols = 1:ncol(plate_plan), gridExpand = TRUE)
+setColWidths(wb, "Plate plan", cols = 1:ncol(plate_plan), widths = c(5, rep(16, ncol(plate_plan) - 1)))
+setRowHeights(wb, "Plate plan", rows = 2:(nrow(plate_plan) + 1), heights = 32)
+
 saveWorkbook(wb, output_file, overwrite = TRUE)
 
 cat(

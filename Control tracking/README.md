@@ -45,4 +45,4 @@ How to read the flags:
 - **Outside 2 SD** happens by chance for about 1 in 10 values while there are only a few plates. Treat it as "keep an eye on", especially for the 10-plex, which has 34 control values per plate.
 - **A whole plate outside on many antigens or controls together** (e.g. all of ctrl 2 high) points to a plate or reagent problem rather than chance.
 
-The limits are calculated from the plates themselves, so they describe the variation seen so far. **They are not acceptance criteria.** Once enough plates have been run (around 15–20 per assay), use the summaries to agree acceptance criteria for the SOPs. The criteria can then be built into the assay scripts.
+The limits are calculated from the plates themselves, so they describe the variation seen so far. They are not acceptance criteria. Once enough plates have been run (around 15–20 per assay), use the summaries to agree acceptance criteria for the SOPs. The criteria can then be built into the assay scripts.

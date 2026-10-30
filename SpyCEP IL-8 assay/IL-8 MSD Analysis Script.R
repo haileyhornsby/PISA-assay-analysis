@@ -2,7 +2,7 @@
 # PISA IL-8 SpyCEP cleavage assay.
 # Master copy: https://github.com/haileyhornsby/PISA-assay-analysis
 
-script_version <- "1.1"
+script_version <- "1.2"
 
 # MSD export -> calibration -> interpolation -> IC50
 
@@ -1245,6 +1245,13 @@ for (sheet in names(wb)) {
 }
 
 # Save workbook
+
+# Plate plan: wrap text so each well label shows on two lines (name, then dilution)
+plate_plan_style <- createStyle(wrapText = TRUE, halign = "center", valign = "center")
+addStyle(wb, "Plate plan", plate_plan_style, rows = 1:(nrow(plate_plan) + 1),
+         cols = 1:ncol(plate_plan), gridExpand = TRUE)
+setColWidths(wb, "Plate plan", cols = 1:ncol(plate_plan), widths = c(5, rep(16, ncol(plate_plan) - 1)))
+setRowHeights(wb, "Plate plan", rows = 2:(nrow(plate_plan) + 1), heights = 32)
 
 saveWorkbook(
   wb,
