@@ -72,9 +72,9 @@ QC flags duplicate CVs above 10% (provisional) for the calibrators, controls and
 
 ## IC50 status
 
-| Status                 | Meaning                                                                                                 |
-|------------------------|---------------------------------------------------------------------------------------------------------|
-| Interpolated           | IC50 within the dilution series                                                                         |
-| Insufficient activity  | IL-8 stays below the 50% value at every dilution. The IC50 is assigned as half the starting dilution.   |
-| High activity - retest | IL-8 stays above the 50% value, so the IC50 is beyond the dilution series. Repeat at a higher dilution. |
-| No result              | Too few valid points to calculate an IC50                                                               |
+| Status                 | Meaning                                                                                                                                                                     |
+|------------------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| Interpolated           | IC50 within the dilution series                                                                                                                                             |
+| Insufficient activity  | IL-8 stays below the 50% value at every dilution. The IC50 is assigned as half the starting dilution.                                                                       |
+| High activity - retest | IL-8 stays above the 50% value, so the IC50 is beyond the dilution series. Repeat at a higher dilution.                                                                     |
+| No result - check      | Fewer than 3 of the 4 dilutions have a signal inside the calibration range, or the fitted line puts the IC50 outside the dilutions tested. Look at the sample individually. |

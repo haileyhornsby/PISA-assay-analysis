@@ -106,6 +106,7 @@ pg_to_ng <- 1 / 1000
 
 # QC
 qc_cv_limit <- 10 # PROVISIONAL: calibrator, control and IVIG duplicates are flagged if CV > 10%
+min_points_for_ic50 <- 3 # an IC50 needs at least 3 dilutions with a signal inside the calibration range
 
 # ------------------------------
 # 3. Read in the MSD plate data
@@ -880,12 +881,12 @@ sample_models <- sample_response %>%
     sample_name
   ) %>%
   group_modify(~ {
-    if (
-      nrow(.x) < 2 ||
-      n_distinct(.x$log_dilution) < 2
-    ) {
+    # Only fit the regression if there are enough usable dilutions
+    n_usable <- n_distinct(.x$log_dilution)
+    if (n_usable < min_points_for_ic50) {
       return(
         tibble(
+          n_usable_dilutions = n_usable,
           intercept = NA_real_,
           slope = NA_real_,
           r_squared = NA_real_
@@ -897,6 +898,7 @@ sample_models <- sample_response %>%
       data = .x
     )
     tibble(
+      n_usable_dilutions = n_usable,
       intercept = coef(fit)[1],
       slope = coef(fit)[2],
       r_squared = summary(fit)$r.squared
@@ -918,31 +920,43 @@ sample_range <- sample_response %>%
     .groups = "drop"
   )
 
-# Calculate the serum dilution corresponding to the 50% inhibition value
-ic50_results <- sample_models %>%
+# Calculate the serum dilution corresponding to the 50% inhibition value.
+# Every sample in the sample map (and the IVIG) is listed, including samples
+# with no usable wells, so none can go missing from the results.
+all_samples <- sample_and_ivig_wells %>%
+  distinct(sample_number, sample_name, start_dilution)
+
+ic50_results <- all_samples %>%
   left_join(
-    sample_range,
+    sample_models,
     by = c("sample_number", "sample_name")
   ) %>%
-  mutate(il8_50_ng_ml = il8_50_ng_ml,
+  left_join(
+    sample_range %>% dplyr::select(-start_dilution),
+    by = c("sample_number", "sample_name")
+  ) %>%
+  mutate(n_usable_dilutions = coalesce(n_usable_dilutions, 0L),
+    il8_50_ng_ml = il8_50_ng_ml,
     log10_ic50 = (
       il8_50_ng_ml - intercept
     ) / slope,
-    
+
     calculated_ic50 = 10^log10_ic50,
-    
-    # Determine what happened in the dilution series
+
+    # Determine what happened in the dilution series. Anything that does not
+    # clearly fit one of the outcomes is "No result - check", to be looked at individually.
     ic50_status = case_when(
-      is.na(calculated_ic50) ~
-        "No result",
+      n_usable_dilutions < min_points_for_ic50 ~
+        "No result - check", # fewer than 3 dilutions inside the calibration range
       observed_max_il8 < il8_50_ng_ml ~
-        "Insufficient activity",
+        "Insufficient activity", # IL-8 below the 50% value at every dilution
       observed_min_il8 > il8_50_ng_ml ~
-        "High activity - retest",
-      calculated_ic50 < min_dilution ~
-        "High activity - retest",
+        "High activity - retest", # IL-8 above the 50% value at every dilution
+      is.finite(calculated_ic50) & slope < 0 &
+        calculated_ic50 >= min_dilution & calculated_ic50 <= max_dilution ~
+        "Interpolated", # crosses the 50% value within the dilution series
       TRUE ~
-        "Interpolated"
+        "No result - check" # e.g. the fitted line puts the IC50 outside the dilutions tested
     ),
     #  assign IC50 = starting dilution / 2 where the sample never reaches the 50% IL-8 threshold
     ic50_dilution = case_when(
@@ -1099,6 +1113,8 @@ assay_parameters <- tibble(
     "Number of sample points",
     "IVIG starting dilution",
     "Number of IVIG points",
+    "Minimum usable dilutions for an IC50",
+    "Duplicate CV limit (%)",
     "Sample dilution correction",
     "pg to ng conversion",
     "Calibration concentrations (pg/mL)",
@@ -1124,6 +1140,8 @@ assay_parameters <- tibble(
     n_sample_points,
     ivig_start_dilution,
     n_ivig_points,
+    min_points_for_ic50,
+    qc_cv_limit,
     sample_dilution_correction,
     pg_to_ng,
     paste(cal_concentrations, collapse = ", "),

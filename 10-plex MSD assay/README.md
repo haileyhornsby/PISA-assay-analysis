@@ -66,12 +66,12 @@ Saved next to the .txt file:
 
 ## Result status
 
-| Status                  | Meaning                                                |
-|-------------------------|--------------------------------------------------------|
-| Interpolated            | Valid result (AU/mL corrected for dilution)            |
-| Duplicate CV > 10%      | Duplicates disagree, so the sample is not interpolated |
-| Below calibration range | Signal below the lowest calibrator in the fit          |
-| Above calibration range | Signal above the highest calibrator                    |
-| Interpolation failed    | Signal could not be converted using the fitted curve   |
+| Status                  | Meaning                                                                                                                  |
+|-------------------------|--------------------------------------------------------------------------------------------------------------------------|
+| Interpolated            | Valid result (AU/mL corrected for dilution)                                                                              |
+| Duplicate CV > 10%      | Duplicates disagree, so the sample is not interpolated                                                                   |
+| Below calibration range | Signal below the lowest calibrator in the fit                                                                            |
+| Above calibration range | Signal above the highest calibrator                                                                                      |
+| No result - check       | Anything else, e.g. a missing or unreadable well, or a signal the curve cannot convert. Look at the sample individually. |
 
 See SOP 1 for the action to take for each status.

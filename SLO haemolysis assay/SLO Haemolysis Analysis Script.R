@@ -410,17 +410,21 @@ ic50_results <- curve_fits %>%
   ungroup() %>%
   mutate(
     # Determine what happened in the dilution series
+    # Anything that does not clearly fit one of the outcomes is "No result - check",
+    # to be looked at individually
     ic50_status = case_when(
-      is.na(calculated_ic50) ~
-        "No result",
+      !is.finite(calculated_ic50) | !is.finite(Slope) ~
+        "No result - check", # the curve could not be fitted
       min_inhibition > 50 ~
         "High activity - retest", # all wells > 50% inhibition; IC50 > final dilution
       max_inhibition < 50 ~
         "Insufficient activity - retest", # all wells < 50% inhibition; IC50 < starting dilution
       min_inhibition > dynamic_range[1] | max_inhibition < dynamic_range[2] ~
         "Partial curve - check", # crosses 50% but does not span 25-75% inhibition
+      Slope > 0 & calculated_ic50 >= start_dilution & calculated_ic50 <= final_dilution ~
+        "Interpolated", # inhibition falls with dilution and the IC50 is within the series
       TRUE ~
-        "Interpolated"
+        "No result - check"
     ),
     # out of range samples are retested, so no IC50 is assigned
     ic50_dilution = if_else(ic50_status == "Interpolated", calculated_ic50, NA_real_)

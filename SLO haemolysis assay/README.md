@@ -80,10 +80,10 @@ Saved next to the .csv file:
 
 An IC50 is only reported when the curve crosses 50% inhibition and includes at least one point below 25% and one above 75% inhibition. Samples outside the range of the assay are retested, and no value is assigned.
 
-| Status                         | Meaning                                                                          |
-|--------------------------------|----------------------------------------------------------------------------------|
-| Interpolated                   | Valid IC50                                                                       |
-| High activity - retest         | All wells above 50% inhibition. Retest at a higher starting dilution.            |
-| Insufficient activity - retest | All wells below 50% inhibition. Retest at a lower starting dilution.             |
-| Partial curve - check          | Crosses 50%, but does not include a point below 25% and one above 75% inhibition |
-| No result                      | Curve could not be fitted                                                        |
+| Status                         | Meaning                                                                                                              |
+|--------------------------------|----------------------------------------------------------------------------------------------------------------------|
+| Interpolated                   | Valid IC50                                                                                                           |
+| High activity - retest         | All wells above 50% inhibition. Retest at a higher starting dilution.                                                |
+| Insufficient activity - retest | All wells below 50% inhibition. Retest at a lower starting dilution.                                                 |
+| Partial curve - check          | Crosses 50%, but does not include a point below 25% and one above 75% inhibition                                     |
+| No result - check              | The curve could not be fitted, or the result does not clearly fit any other status. Look at the sample individually. |

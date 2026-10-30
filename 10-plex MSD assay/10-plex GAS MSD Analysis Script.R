@@ -516,6 +516,7 @@ sample_results <- sample_data %>%
   left_join(calibration_ranges, by = c("spot", "antigen")) %>%
   mutate(
     calibration_status = case_when(
+      !is.finite(mean_signal) ~ "No signal",
       mean_signal < calibration_signal_min ~ "Below calibration range",
       mean_signal > calibration_signal_max ~ "Above calibration range",
       TRUE ~ "Within calibration range"
@@ -524,7 +525,7 @@ sample_results <- sample_data %>%
   rowwise() %>%
   mutate(
     # Convert signal to AU/mL when the duplicates agree and the signal is within the calibration range
-    interpolated_AU_ml = if (cv_qc == "PASS" && calibration_status == "Within calibration range") {
+    interpolated_AU_ml = if (isTRUE(cv_qc == "PASS") && calibration_status == "Within calibration range") {
       inverse_4pl(mean_signal, fit)
     } else {
       NA_real_
@@ -534,11 +535,14 @@ sample_results <- sample_data %>%
   mutate(
     # Apply the sample dilution
     corrected_AU_ml = interpolated_AU_ml * start_dilution,
+    # Anything that does not clearly fit one of the outcomes is "No result - check",
+    # to be looked at individually (e.g. a missing well, or a signal the curve cannot convert)
     result_status = case_when(
+      !is.finite(mean_signal) | is.na(cv_qc) ~ "No result - check",
       cv_qc == "FLAG" ~ paste0("Duplicate CV > ", sample_cv_limit, "%"),
       calibration_status != "Within calibration range" ~ calibration_status,
-      is.na(interpolated_AU_ml) ~ "Interpolation failed",
-      TRUE ~ "Interpolated"
+      is.finite(interpolated_AU_ml) ~ "Interpolated",
+      TRUE ~ "No result - check"
     )
   ) %>%
   dplyr::select(-fit) %>%
@@ -608,7 +612,7 @@ results_heatmap <- ggplot(
         grepl("CV", result_status) ~ "CV",
         result_status == "Below calibration range" ~ "<",
         result_status == "Above calibration range" ~ ">",
-        TRUE ~ "NA"
+        TRUE ~ "?"
       )
     ),
   aes(x = antigen, y = sample_label, fill = log10(corrected_AU_ml))) +
@@ -618,7 +622,7 @@ results_heatmap <- ggplot(
   scale_x_discrete(position = "top") +
   labs(
     title = "Sample results (AU/mL)",
-    subtitle = "CV = duplicate CV above limit, < / > = below / above calibration range",
+    subtitle = "CV = duplicate CV above limit, < / > = below / above calibration range, ? = no result - check",
     x = NULL,
     y = NULL,
     fill = "log10 AU/mL"
