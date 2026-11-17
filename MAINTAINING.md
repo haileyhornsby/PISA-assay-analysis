@@ -47,7 +47,6 @@ If a change affects how the assay is run or analysed, update the SOP and the ass
 
 Users never edit the scripts: each script asks for its input file in a pop-up window when it runs, so users can always **Pull** updates without conflicts. Every assay value sits in the **"Fixed assay information - do not change"** block near the top of each script, and is changed only by the maintainer, with a new script version. Values that may need updating:
 
-- **IL-8 (`cal_concentrations`):** the top IL-8 calibrator concentration from the certificate of analysis. Update it for each new IL-8 lot.
 - **10-plex (`spot_map$top_AU_ml`):** the AU/mL assigned to S1 for each antigen.
 - **QC limits, dilution series, control dilutions and IVIG starting dilutions**, if the SOP changes.
 

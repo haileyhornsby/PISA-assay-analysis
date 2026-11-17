@@ -9,7 +9,10 @@ script_version <- "1.2"
 # Necessary input files
 # a .txt MSD plate reader output file in "_each spot as plate" format
 # a .csv sample map with the SAME NAME as the .txt file, saved in the same folder,
-#   with the headers sample_number, sample_name, start_dilution (one row per sample, 1-16, following SOP plate plan)
+#   starting with two lines for the MSD Calibrator Blend lot (calibrator_blend_lot) and the IL-8
+#   "Stock Concentration of Reconstituted Calibrator" in pg/mL from that lot's certificate of
+#   analysis (calibrator_blend_il8_pg_ml), then
+#   the headers sample_number, sample_name, start_dilution (one row per sample, 1-16, following SOP plate plan)
 
 # Plate layout
 # Columns 1-8: samples 1-8 in rows A-D and samples 9-16 in rows E-H (3-fold dilutions down the column)
@@ -97,8 +100,10 @@ n_ivig_points <- 4 # IVIG series is 4 wells long
 
 # IL-8 calibration concentrations (pg/mL)
 # Calibrators 1-7 are the standard curve, 8 is the assay blank
-cal_concentrations <- 583 * 4^-(0:6) # top concentration from the IL-8 certificate of analysis, 4-fold steps
-# (updated by the maintainer, with a new script version, when a new IL-8 lot is used)
+# Calibrator 1 is the reconstituted MSD Proinflammatory Panel 1 Calibrator Blend. Its lot and IL-8
+# stock concentration from the certificate of analysis are entered for each run at the top of the
+# sample map; calibrators 2-7 are 4-fold steps from Calibrator 1
+cal_dilution_factor <- 4
 
 # Sample conversion
 sample_dilution_correction <- 50 # a 50x correction factor is applied due to dilution for the MSD assay
@@ -193,8 +198,41 @@ plate_long <- expand.grid(
 # 4. Read sample map and annotate data
 # ------------------------------------
 
+# The first two lines of the sample map hold the MSD Calibrator Blend lot and its IL-8 concentration
+run_details <- read_csv(
+  sample_map_file,
+  col_names = FALSE,
+  n_max = 2,
+  col_types = cols(.default = col_character())
+)
+run_field <- function(name) {
+  value <- run_details$X2[trimws(run_details$X1) == name]
+  if (length(value) == 1) trimws(coalesce(value, "")) else NA_character_
+}
+calibrator_lot <- run_field("calibrator_blend_lot")
+il8_top_text <- run_field("calibrator_blend_il8_pg_ml")
+il8_top_pg_ml <- suppressWarnings(as.numeric(il8_top_text))
+if (is.na(calibrator_lot) || is.na(il8_top_text)) {
+  stop("The sample map does not start with the calibrator_blend_lot and calibrator_blend_il8_pg_ml lines. ",
+       "Copy the current IL-8_sample_map_template.csv and fill it in again.", call. = FALSE)
+}
+run_problems <- c(
+  if (calibrator_lot == "")
+    "No calibrator lot entered. Enter the MSD Calibrator Blend lot number next to calibrator_blend_lot at the top of the sample map.",
+  if (il8_top_text == "")
+    "No IL-8 calibrator concentration entered. Enter the IL-8 Stock Concentration of Reconstituted Calibrator (pg/mL) from the MSD Calibrator Blend certificate of analysis next to calibrator_blend_il8_pg_ml.",
+  if (il8_top_text != "" && (is.na(il8_top_pg_ml) || il8_top_pg_ml <= 0))
+    paste0("calibrator_blend_il8_pg_ml must be a number above 0 (pg/mL), not '", il8_top_text, "'.")
+)
+if (length(run_problems) > 0) {
+  stop(paste(run_problems, collapse = "\n"), call. = FALSE)
+}
+cal_concentrations <- il8_top_pg_ml * cal_dilution_factor^-(0:6)
+message("MSD Calibrator Blend lot ", calibrator_lot, ": IL-8 Calibrator 1 = ", il8_top_pg_ml, " pg/mL")
+
 sample_map <- read_csv(
   sample_map_file,
+  skip = 2,
   col_types = cols(.default = col_character())
 ) %>%
   mutate(
@@ -1117,6 +1155,8 @@ assay_parameters <- tibble(
     "Duplicate CV limit (%)",
     "Sample dilution correction",
     "pg to ng conversion",
+    "MSD Calibrator Blend lot",
+    "IL-8 Calibrator 1 (pg/mL)",
     "Calibration concentrations (pg/mL)",
     "Calibration signal minimum",
     "Calibration signal maximum",
@@ -1144,6 +1184,8 @@ assay_parameters <- tibble(
     qc_cv_limit,
     sample_dilution_correction,
     pg_to_ng,
+    calibrator_lot,
+    il8_top_pg_ml,
     paste(cal_concentrations, collapse = ", "),
     calibration_signal_min,
     calibration_signal_max,

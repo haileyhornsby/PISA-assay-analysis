@@ -9,7 +9,7 @@
 Put both files in the same folder:
 
 1. **MSD export (.txt)** in the "each spot as plate" format. This contains all 10 spots.
-2. **Sample map (.csv)**: copy **`10-plex_sample_map_template.csv`**, fill it in, and save it with **exactly the same file name** as the .txt (only the ending differs). The template already has these headers and a row for every position:
+2. **Sample map (.csv)**: copy **`10-plex_sample_map_template.csv`**, fill it in, and save it with **exactly the same file name** as the .txt (only the extension differs). The template already has these headers and a row for every position:
 
    | sample_number | sample_name | start_dilution |
    |:-------------:|:-----------:|:--------------:|

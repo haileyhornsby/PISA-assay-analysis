@@ -13,7 +13,18 @@
 Put both files in the same folder:
 
 1. **MSD export (.txt)** in the "each spot as plate" format.
-2. **Sample map (.csv)**: copy **`IL-8_sample_map_template.csv`**, fill it in, and save it with **exactly the same file name** as the .txt (only the ending differs). The template already has these headers and a row for every position:
+2. **Sample map (.csv)**: copy **`IL-8_sample_map_template.csv`**, fill it in, and save it with **exactly the same file name** as the .txt (only the extension differs). The template already has these headers and a row for every position.
+
+   **First, fill in the two calibrator lines at the top** from the certificate of analysis of the **MSD Proinflammatory Panel 1 (human) Calibrator Blend** used on the plate. For example, for Calibrator Blend lot A0080476:
+
+   |           column A           |  column B  |
+   |:----------------------------:|:----------:|
+   |    `calibrator_blend_lot`    |  A0080476  |
+   | `calibrator_blend_il8_pg_ml` |    591     |
+
+   `calibrator_blend_il8_pg_ml` is the IL-8 value in the "Stock Concentration of Reconstituted Calibrator" column (pg/mL), i.e. the blend after reconstitution in 1 mL Diluent 2. This is Calibrator 1, and the script builds calibrators 2–7 from it in 4-fold steps. It stops with a message if either line is blank or the concentration isn't a number above 0. The lot and concentration are recorded in the Assay parameters sheet of the results file.
+
+   Then fill in the samples:
 
    | sample_number | sample_name | start_dilution |
    |:-------------:|:-----------:|:--------------:|
@@ -42,7 +53,7 @@ Put both files in the same folder:
 - **Samples 1–16:** one per column, 4-point dilution series. Rows A and E are the starting dilution, and each row down is a further 3-fold dilution.
 - **Max IL-8 / Min IL-8:** controls for uncleaved and fully cleaved IL-8 (4 wells each).
 - **IVIG:** in duplicate, starting at 1:12.5, with 3-fold dilutions down rows E–H.
-- **Cal 1–7:** IL-8 calibrators in duplicate, 4-fold dilutions from the top concentration on the certificate of analysis. The concentrations are set in the script. Tell the script maintainer when a new IL-8 lot is introduced, so the script can be updated. **Blank** is the assay blank.
+- **Cal 1–7:** IL-8 calibrators in duplicate, Cal 1 is the reconstituted MSD Calibrator Blend, and Cal 2–7 are 4-fold dilutions of it. The Cal 1 IL-8 concentration is entered in the sample map for each run (see above). **Blank** is the assay blank.
 
 ## Outputs
 
